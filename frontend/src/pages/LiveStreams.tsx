@@ -32,18 +32,25 @@ interface AddStreamPayload {
 }
 
 // ── Demo streams (pre-filled for the demo) ───────────────────────────────────
+// Streams served by MediaMTX on this server — 3 looping video files
 const DEMO_PRESETS = [
   {
-    name:        'Traffic — Intersection View',
-    url:         'rtsp://wowzaec2demo.streamlock.net/vod/mp4:BigBuckBunny_115k.mp4',
-    description: 'Public Wowza demo RTSP stream (simulated traffic/outdoor)',
-    tags:        ['outdoor', 'vehicles', 'demo'],
+    name:        'Parking Lot — Cam 1',
+    url:         'rtsp://172.20.146.6:8554/cam1',
+    description: 'Outdoor parking lot surveillance — looping iStock footage via MediaMTX',
+    tags:        ['outdoor', 'parking', 'vehicles', 'surveillance'],
   },
   {
-    name:        'Big Buck Bunny (Demo)',
-    url:         'rtsp://wowzaec2demo.streamlock.net/vod/mp4:BigBuckBunny_115k.mp4',
-    description: 'Wowza public RTSP endpoint for testing',
-    tags:        ['animation', 'outdoor', 'demo'],
+    name:        'Lobby — Cam 2',
+    url:         'rtsp://172.20.146.6:8554/cam2',
+    description: 'Indoor lobby camera — looping iStock footage via MediaMTX',
+    tags:        ['indoor', 'lobby', 'people', 'access-control'],
+  },
+  {
+    name:        'Entrance Gate — Cam 3',
+    url:         'rtsp://172.20.146.6:8554/cam3',
+    description: 'Main entrance gate camera — longer demo footage via MediaMTX',
+    tags:        ['entrance', 'security', 'gate', 'perimeter'],
   },
 ]
 
