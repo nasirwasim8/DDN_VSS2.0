@@ -112,18 +112,28 @@ export default function Header({ tabs, activeTab, onTabChange }: HeaderProps) {
 
           {/* Center: Tabs */}
           <nav className="flex items-center gap-1">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => onTabChange(tab.id)}
-                className={`px-5 py-2 text-[13px] font-medium tracking-wide transition-all duration-200 rounded-md ${activeTab === tab.id
-                  ? 'text-[var(--ddn-red)]'
-                  : 'text-text-secondary hover:text-text-primary'
+            {tabs.map((tab) => {
+              const isGtc = tab.id === 'gtc'
+              const isActive = activeTab === tab.id
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => onTabChange(tab.id)}
+                  className={`px-4 py-1.5 text-[13px] font-medium tracking-wide transition-all duration-200 rounded-full ${
+                    isGtc
+                      ? isActive
+                        ? 'bg-[#ED2738] text-white shadow-sm'
+                        : 'border border-[#ED2738]/40 text-[#ED2738] hover:bg-[#ED2738]/10'
+                      : isActive
+                        ? 'text-[var(--ddn-red)]'
+                        : 'text-text-secondary hover:text-text-primary'
                   }`}
-              >
-                {tab.label}
-              </button>
-            ))}
+                >
+                  {isGtc && <span className="mr-1 text-[10px]">✦</span>}
+                  {tab.label}
+                </button>
+              )
+            })}
           </nav>
 
           {/* Right: GPU Badge + Theme Toggle */}

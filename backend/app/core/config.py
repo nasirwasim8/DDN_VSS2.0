@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     # GPU Configuration
     GPU_COUNT: int = int(os.getenv("GPU_COUNT", "0"))  # Number of GPUs available (0 = CPU only)
 
+    # LLM Enrichment (Ollama offline / OpenAI cloud)
+    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "auto")   # "openai", "ollama", or "auto" (try OpenAI first, fallback to Ollama)
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "llava:7b")
+    OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
+
+
     class Config:
         env_file = ".env"
         extra = "ignore"

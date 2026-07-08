@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Play, Square, RefreshCw, Server, CheckCircle, XCircle, X, Loader2, Image as ImageIcon, Video, FileText } from 'lucide-react'
+import { Play, Square, RefreshCw, Server, CheckCircle, XCircle, X, Loader2, Image as ImageIcon, Video, FileText, Trash2 } from 'lucide-react'
 import { api } from '../services/api'
 
 export default function ContinuousIngestion() {
@@ -105,6 +105,11 @@ export default function ContinuousIngestion() {
 
         localStorage.setItem('continuous_ingestion_bucket', bucketName)
 
+        // Clear any stale state from previous session before starting fresh
+        setProcessedFiles([])
+        setProcessedVideos([])
+        setLastCheck('')
+        setCurrentFile('')
         setMonitoringStatus('Starting monitoring...')
         try {
             const result = await api.startMonitoring(bucketName)
@@ -113,6 +118,20 @@ export default function ContinuousIngestion() {
         } catch (error: any) {
             setMonitoringStatus(`Failed to start monitoring: ${error.response?.data?.detail || error.message}`)
             setIsMonitoring(false)
+        }
+    }
+
+    const clearHistory = async () => {
+        try {
+            await api.clearMonitoringHistory()
+            setProcessedFiles([])
+            setProcessedVideos([])
+            setLastCheck('')
+            setMonitoringStatus(prev =>
+                prev.split('\n')[0] + '\n\nHistory cleared.'
+            )
+        } catch (error: any) {
+            setMonitoringStatus(`Failed to clear history: ${error.response?.data?.detail || error.message}`)
         }
     }
 
@@ -248,6 +267,16 @@ export default function ContinuousIngestion() {
                             <RefreshCw className="w-4 h-4" />
                             Status
                         </button>
+                        {(processedFiles.length > 0 || processedVideos.length > 0) && (
+                            <button
+                                onClick={clearHistory}
+                                className="btn-secondary flex items-center gap-2 border-orange-200 text-orange-600 hover:border-orange-300 dark:border-orange-900 dark:text-orange-400"
+                                title="Clear processed file history"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                                Clear
+                            </button>
+                        )}
                     </div>
                 </div>
 

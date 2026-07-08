@@ -345,14 +345,19 @@ export const api = {
     videoSummary: string,
     detectedObjects: string,
     customTags: string,
-    customSummary: string
+    customSummary: string,
+    enrichedTags?: string  // optional: comma-separated LLM search tags
   ): Promise<{ success: boolean; message: string; manifest: AssetManifest }> => {
-    const response = await axiosInstance.put(`/upload/manifest/${assetId}`, {
+    const body: Record<string, string> = {
       video_summary: videoSummary,
       detected_objects: detectedObjects,
       custom_tags: customTags,
       custom_summary: customSummary
-    })
+    }
+    if (enrichedTags !== undefined) {
+      body.enriched_tags = enrichedTags
+    }
+    const response = await axiosInstance.put(`/upload/manifest/${assetId}`, body)
     return response.data
   },
 
@@ -376,6 +381,11 @@ export const api = {
 
   getMonitoringStatus: async () => {
     const response = await axiosInstance.get('/ingestion/status')
+    return response.data
+  },
+
+  clearMonitoringHistory: async () => {
+    const response = await axiosInstance.post('/ingestion/clear')
     return response.data
   },
 }

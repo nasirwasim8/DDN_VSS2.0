@@ -10,7 +10,7 @@ import unicodedata
 from typing import List
 from datetime import datetime
 from pathlib import Path
-from fastapi import APIRouter, UploadFile, File, HTTPException, Form, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, HTTPException, Form, BackgroundTasks, Request
 from fastapi.responses import StreamingResponse
 from PIL import Image
 import io
@@ -155,6 +155,159 @@ async def load_config():
             "embeddings_path": storage_config.local_cache_config.get('embeddings_path', '')
         }
     }
+
+
+@config_router.get("/llm")
+async def get_llm_config():
+    """Get current LLM enrichment configuration."""
+    import os
+    import urllib.request
+
+    # Load persisted LLM config first (fills gaps not covered by env vars)
+    _load_llm_config_from_disk()
+
+    provider = os.getenv("LLM_PROVIDER", "auto")
+    model = os.getenv("LLM_MODEL", "llava:7b")
+    openai_key = os.getenv("OPENAI_API_KEY", "")
+    ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+
+    # Mask the key for display
+    masked_key = ""
+    if openai_key:
+        masked_key = openai_key[:7] + "..." + openai_key[-4:] if len(openai_key) > 11 else "****"
+
+    # Check Ollama availability
+    ollama_available = False
+    try:
+        urllib.request.urlopen(f"{ollama_url}/api/tags", timeout=2)
+        ollama_available = True
+    except Exception:
+        pass
+
+    # Check real OpenAI connectivity (not just key presence)
+    openai_reachable = False
+    if openai_key:
+        try:
+            req = urllib.request.Request(
+                "https://api.openai.com/v1/models",
+                headers={"Authorization": f"Bearer {openai_key}"},
+                method="GET"
+            )
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                openai_reachable = (resp.status == 200)
+        except Exception as e:
+            logger.warning(f"OpenAI connectivity check failed: {e}")
+
+    return {
+        "provider": provider,
+        "model": model,
+        "openai_key_set": bool(openai_key),
+        "openai_key_masked": masked_key,
+        "openai_reachable": openai_reachable,
+        "ollama_url": ollama_url,
+        "ollama_available": ollama_available,
+        "fallback_mode": "auto",  # always tries OpenAI first then Ollama
+    }
+
+
+def _get_llm_config_path() -> str:
+    """Return path to persisted LLM config JSON."""
+    config_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
+        "data"
+    )
+    os.makedirs(config_dir, exist_ok=True)
+    return os.path.join(config_dir, "llm_config.json")
+
+
+def _load_llm_config_from_disk():
+    """Load persisted LLM config into os.environ (only fills missing vars)."""
+    import json
+    config_path = _get_llm_config_path()
+    if not os.path.exists(config_path):
+        return
+    try:
+        with open(config_path, "r") as f:
+            data = json.load(f)
+        # Only set if not already present in the environment
+        for env_key, json_key in [
+            ("LLM_PROVIDER", "provider"),
+            ("OPENAI_API_KEY", "openai_api_key"),
+            ("OLLAMA_BASE_URL", "ollama_url"),
+            ("LLM_MODEL", "model"),
+        ]:
+            if data.get(json_key) and not os.environ.get(env_key):
+                os.environ[env_key] = data[json_key]
+                logger.info(f"✅ Loaded {env_key} from persisted LLM config")
+    except Exception as e:
+        logger.warning(f"Failed to load persisted LLM config: {e}")
+
+
+def _save_llm_config_to_disk(provider: str, openai_key: str, ollama_url: str, model: str):
+    """Persist LLM config to disk so it survives process restarts."""
+    import json
+    config_path = _get_llm_config_path()
+    # Load existing data so we don't overwrite fields we're not updating
+    existing = {}
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r") as f:
+                existing = json.load(f)
+        except Exception:
+            pass
+    if provider:
+        existing["provider"] = provider
+    if openai_key:
+        existing["openai_api_key"] = openai_key
+    if ollama_url:
+        existing["ollama_url"] = ollama_url
+    if model:
+        existing["model"] = model
+    try:
+        with open(config_path, "w") as f:
+            json.dump(existing, f, indent=2)
+        logger.info(f"💾 Persisted LLM config to {config_path}")
+    except Exception as e:
+        logger.error(f"Failed to persist LLM config: {e}")
+
+
+@config_router.post("/llm")
+async def save_llm_config(request: Request):
+    """Save LLM enrichment configuration — persists to disk AND process env."""
+    import os
+    from app.services import llm_enrichment as _llme
+
+    try:
+        data = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    provider = data.get("provider", "auto")
+    openai_key = (data.get("openai_api_key") or "").strip()
+    ollama_url = (data.get("ollama_url") or "").strip()
+    model = (data.get("model") or "").strip()
+
+    if provider not in ("openai", "ollama", "auto"):
+        raise HTTPException(status_code=400, detail="provider must be 'openai', 'ollama', or 'auto'")
+
+    # ── 1. Persist to disk (survives restarts) ────────────────────────────────
+    _save_llm_config_to_disk(provider, openai_key, ollama_url, model)
+
+    # ── 2. Apply to running process environment ───────────────────────────────
+    os.environ["LLM_PROVIDER"] = provider
+    if openai_key:
+        os.environ["OPENAI_API_KEY"] = openai_key
+    if ollama_url:
+        os.environ["OLLAMA_BASE_URL"] = ollama_url
+    if model:
+        os.environ["LLM_MODEL"] = model
+
+    # ── 3. Reset the singleton so next enrichment picks up new settings ───────
+    if hasattr(_llme, '_enrichment_service'):
+        _llme._enrichment_service = None
+
+    logger.info(f"LLM config saved: provider={provider} key_set={bool(openai_key)}")
+    return {"success": True, "provider": provider, "message": f"LLM provider set to {provider} and saved to disk"}
 
 
 @config_router.post("/local-cache", response_model=LocalCacheConfigResponse)
@@ -613,6 +766,7 @@ def process_video_background(
         
         all_captions = []
         all_detected_objects = []
+        all_keyframe_paths = []   # collect local paths for LLM vision input
         
         # Limit to first 3 chunks for faster demo processing
         chunks_to_process = chunks[:min(3, len(chunks))]
@@ -632,17 +786,25 @@ def process_video_background(
                 if chunk_result:
                     manifest.chunks.append(ChunkAnalysis(**chunk_result))
                     
-                    # Collect metadata for summary
+                    # Collect metadata for summary + enrichment
                     for kf in chunk_result.get('keyframes', []):
                         if kf.get('caption'):
                             all_captions.append(kf['caption'])
                         if kf.get('tags') and kf['tags'].get('objects'):
                             all_detected_objects.extend(kf['tags']['objects'])
+                    
+                    # Collect local keyframe file paths for LLM vision
+                    chunk_kf_dir = os.path.join(temp_dir, f"chunk_{chunk.chunk_id}")
+                    if os.path.isdir(chunk_kf_dir):
+                        for fname in sorted(os.listdir(chunk_kf_dir)):
+                            if fname.lower().endswith(('.jpg', '.jpeg', '.png')):
+                                all_keyframe_paths.append(os.path.join(chunk_kf_dir, fname))
+
             except Exception as e:
                 logger.error(f"Error processing chunk {chunk.chunk_id}: {e}")
                 continue
         
-        # Generate video summary
+        # ── Raw summary (fallback / always generated) ─────────────────────────
         if not custom_summary and all_captions:
             manifest.video_summary = ". ".join(all_captions[:3]) + "."
         else:
@@ -656,8 +818,32 @@ def process_video_background(
         
         manifest.custom_summary = custom_summary
         manifest.custom_tags = custom_tags
+
+        # ── LLM Enrichment (OpenAI → Ollama fallback, runs automatically) ─────
+        try:
+            from app.services.llm_enrichment import enrich_with_fallback
+            enriched, provider_used = enrich_with_fallback(
+                keyframe_paths=all_keyframe_paths,
+                captions=all_captions,
+                detected_objects=all_detected_objects,
+                duration_seconds=manifest.duration_seconds
+            )
+            if enriched:
+                manifest.enriched_summary = enriched.summary
+                manifest.enriched_tags = enriched.search_tags
+                manifest.scene_type = enriched.scene_type
+                manifest.key_events = enriched.key_events
+                manifest.llm_enriched = True
+                manifest.llm_provider_used = provider_used  # e.g. "openai" or "ollama"
+                # Use LLM summary as the primary video_summary
+                if enriched.summary:
+                    manifest.video_summary = enriched.summary
+                logger.info(f"✨ Enrichment done via {provider_used}: {len(enriched.search_tags)} tags | scene={enriched.scene_type}")
+        except Exception as e:
+            logger.warning(f"LLM enrichment skipped: {e}")
+
         
-        # Update statistics
+        # ── Finalize manifest ──────────────────────────────────────────────────
         manifest.update_statistics()
         manifest.processing_status = "completed"
         manifest.processing_timestamp = datetime.utcnow()
@@ -894,6 +1080,7 @@ async def update_asset_manifest(
         detected_objects = update_data.get('detected_objects', '')
         custom_tags = update_data.get('custom_tags', '')
         custom_summary = update_data.get('custom_summary', '')
+        enriched_tags_raw = update_data.get('enriched_tags', None)  # new: LLM search tags
         
         # Update fields if provided
         
@@ -911,6 +1098,13 @@ async def update_asset_manifest(
             manifest.custom_tags = custom_tags
         if custom_summary:
             manifest.custom_summary = custom_summary
+        # Update enriched_tags if provided (support both list and comma-separated string)
+        if enriched_tags_raw is not None:
+            if isinstance(enriched_tags_raw, list):
+                setattr(manifest, 'enriched_tags', enriched_tags_raw)
+            elif isinstance(enriched_tags_raw, str) and enriched_tags_raw.strip():
+                tags_list = [t.strip().lstrip('#') for t in enriched_tags_raw.split(',') if t.strip()]
+                setattr(manifest, 'enriched_tags', tags_list)
         
         
         logger.info(f"📋 Manifest after update:")
@@ -1697,6 +1891,17 @@ async def get_monitoring_status():
         return status
     except Exception as e:
         logger.error(f"Failed to get status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@ingestion_router.post("/clear")
+async def clear_monitoring_history():
+    """Clear processed file history without stopping monitoring."""
+    try:
+        message = bucket_monitor.clear_history()
+        return {"success": True, "message": message}
+    except Exception as e:
+        logger.error(f"Failed to clear history: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

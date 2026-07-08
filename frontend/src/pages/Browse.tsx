@@ -199,13 +199,17 @@ export default function BrowsePage() {
         </button>
       </div>
 
-      {/* Content Grid */}
+      {/* Content Grid - scrollable area with visible scrollbar */}
       {isLoading ? (
         <div className="text-center py-16">
           <Loader2 className="w-8 h-8 mx-auto mb-4 animate-spin text-ddn-red" />
           <p className="text-muted">Loading content...</p>
         </div>
       ) : objects.length > 0 ? (
+        <div
+          className="scrollbar-styled pr-1"
+          style={{ maxHeight: 'calc(100vh - 320px)', minHeight: '300px' }}
+        >
         <div className="media-grid">
           {objects.map((obj: ObjectInfo) => (
             <div key={obj.key} className="media-card group">
@@ -308,21 +312,38 @@ export default function BrowsePage() {
                       rows={2}
                     />
                   </div>
-                ) : obj.metadata?.detected_objects ? (
-                  <div className="mb-2">
-                    <span className="text-xs font-medium text-neutral-700 dark:text-neutral-300 block mb-1.5">Detected Tags:</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {String(obj.metadata.detected_objects).split(',').map((tag, idx) => (
-                        <span
-                          key={idx}
-                          className="px-2 py-1 bg-green-100 text-green-700 border border-green-200 rounded-md text-xs font-medium dark:bg-green-900/30 dark:text-green-400 dark:border-green-800"
-                        >
-                          🏷️ {tag.trim()}
-                        </span>
-                      ))}
+                ) : (() => {
+                  // Prefer LLM search tags when enriched; fall back to BLIP detected_objects
+                  const enrichedTags: string[] = Array.isArray((obj.metadata as any)?.enriched_tags)
+                    ? (obj.metadata as any).enriched_tags
+                    : [];
+                  const rawTags = obj.metadata?.detected_objects
+                    ? String(obj.metadata.detected_objects).split(',').map((t: string) => t.trim()).filter(Boolean)
+                    : [];
+                  const displayTags = enrichedTags.length > 0 ? enrichedTags : rawTags;
+                  const isEnriched = enrichedTags.length > 0;
+                  return displayTags.length > 0 ? (
+                    <div className="mb-2">
+                      <span className="text-xs font-medium text-neutral-700 dark:text-neutral-300 block mb-1.5">
+                        {isEnriched ? 'AI Search Tags:' : 'Detected Tags:'}
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {displayTags.map((tag: string, idx: number) => (
+                          <span
+                            key={idx}
+                            className={`px-2 py-1 rounded-md text-xs font-medium border ${
+                              isEnriched
+                                ? 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800'
+                                : 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800'
+                            }`}
+                          >
+                            {isEnriched ? `#${tag.replace(/^#/, '')}` : `🏷️ ${tag}`}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ) : null}
+                  ) : null;
+                })()}
 
                 {/* Metadata Section - AI Summary */}
                 {editingAssetId === obj.metadata?.asset_id ? (
@@ -374,6 +395,7 @@ export default function BrowsePage() {
               </div>
             </div>
           ))}
+        </div>
         </div>
       ) : (
         <div className="text-center py-16">

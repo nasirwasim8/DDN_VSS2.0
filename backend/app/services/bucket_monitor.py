@@ -54,6 +54,17 @@ class BucketMonitor:
         self.bucket_name = bucket_name
         self.monitoring = True
         
+        # ── Reset state so old data never bleeds into a new session ──
+        self.processed_files = set()
+        self.processed_videos = []
+        self.current_file_progress = {}
+        # Drain any leftover events from a previous run
+        while not self.processing_events.empty():
+            try:
+                self.processing_events.get_nowait()
+            except Exception:
+                break
+        
         # Create folder structure if it does not exist
         self._ensure_folder_structure()        
         # Start monitoring thread
@@ -126,6 +137,11 @@ Files are automatically moved here after:
         if self.monitor_thread:
             self.monitor_thread.join(timeout=2)
         
+        # Clear session state so next start is fresh
+        self.processed_files = set()
+        self.processed_videos = []
+        self.current_file_progress = {}
+        
         logger.info(f"🛑 Stopped monitoring bucket: {self.bucket_name}")
         return "Monitoring stopped"
     
@@ -140,6 +156,15 @@ Files are automatically moved here after:
             "current_file_progress": self.current_file_progress,
             "last_check": datetime.now().isoformat() if self.monitoring else None
         }
+
+    def clear_history(self) -> str:
+        """Clear processed files history without stopping monitoring."""
+        self.processed_files = set()
+        self.processed_videos = []
+        self.current_file_progress = {}
+        logger.info("🗑️ Cleared processed file history")
+        return "History cleared"
+
     
     def _emit_progress(self, event_data: Dict):
         """Emit progress event for real-time streaming."""
@@ -520,19 +545,76 @@ Files are automatically moved here after:
                     success = artifact_manager.save_manifest(manifest)
                     if success:
                         logger.info(f"✅ Manifest created: {asset_id}")
+
+                        # --- LLM Enrichment: save frames to temp files for vision API ---
+                        keyframe_tmp_paths = []
+                        try:
+                            from app.services.llm_enrichment import enrich_with_fallback
+
+                            # Extract a few frames as actual image files for the vision model
+                            try:
+                                sample_frames = self.video_analyzer.extract_frames(tmp_path, num_frames=6)
+                                # Pick up to 3 evenly-spaced frames
+                                step = max(1, len(sample_frames) // 3)
+                                selected_frames = [sample_frames[i] for i in range(0, min(len(sample_frames), step * 3), step)]
+                                for pil_img in selected_frames:
+                                    kf_tmp = tempfile.NamedTemporaryFile(
+                                        delete=False, suffix='.jpg'
+                                    )
+                                    pil_img.save(kf_tmp.name, format='JPEG', quality=85)
+                                    kf_tmp.close()
+                                    keyframe_tmp_paths.append(kf_tmp.name)
+                            except Exception as kf_err:
+                                logger.warning(f"⚠️ Could not extract keyframes for enrichment: {kf_err}")
+
+                            objects_list = [o.strip() for o in detected_objects.split(',') if o.strip()]
+                            duration_sec = float(analysis_result.get('duration_seconds', 0.0) or 0.0)
+
+                            logger.info(f"🤖 Running LLM enrichment with {len(keyframe_tmp_paths)} keyframes for {asset_id}")
+                            enriched, provider_used = enrich_with_fallback(
+                                keyframe_paths=keyframe_tmp_paths,
+                                captions=frame_captions,
+                                detected_objects=objects_list,
+                                duration_seconds=duration_sec
+                            )
+                            if enriched and enriched.summary:
+                                manifest.llm_enriched = True
+                                manifest.enriched_summary = enriched.summary
+                                manifest.enriched_tags = getattr(enriched, 'search_tags', enriched.tags if hasattr(enriched, 'tags') else []) or []
+                                manifest.scene_type = getattr(enriched, 'scene_type', '') or ''
+                                manifest.key_events = getattr(enriched, 'key_events', []) or []
+                                manifest.video_summary = enriched.summary  # override BLIP summary
+                                manifest.llm_provider_used = provider_used
+                                artifact_manager.save_manifest(manifest)
+                                video_summary = enriched.summary  # update local var for display
+                                logger.info(f"✅ LLM enriched via {provider_used}: {asset_id}")
+                            else:
+                                logger.warning(f"⚠️ LLM enrichment returned no result for: {asset_id}")
+                        except Exception as enrich_error:
+                            logger.warning(f"⚠️ LLM enrichment failed for continuous ingest: {enrich_error}", exc_info=True)
+                        finally:
+                            # Clean up temp keyframe files
+                            for kp in keyframe_tmp_paths:
+                                try:
+                                    if os.path.exists(kp):
+                                        os.unlink(kp)
+                                except Exception:
+                                    pass
+                        # --- End LLM Enrichment ---
+
                     else:
                         logger.warning(f"⚠️ Failed to save manifest: {asset_id}")
                 except Exception as manifest_error:
                     logger.warning(f"⚠️ Failed to create manifest: {manifest_error}")
                     # Continue anyway - video is still stored
-                
-                # Track video in history (for frontend display)
+
+                # Track video in history (for frontend display) - uses updated video_summary
                 video_metadata = {
                     'asset_id': asset_id,
                     'filename': filename,
                     'timestamp': timestamp,
                     'upload_time': datetime.now().isoformat(),
-                    'video_summary': video_summary[:200],  # Truncate for display
+                    'video_summary': video_summary[:200],  # uses enriched summary if available
                     'detected_objects': detected_objects,
                     'frame_count': len(frame_analyses),
                     's3_key': new_s3_key,
@@ -542,14 +624,14 @@ Files are automatically moved here after:
                 # Keep only last 50 videos in memory
                 if len(self.processed_videos) > 50:
                     self.processed_videos = self.processed_videos[-50:]
-                
+
                 logger.info(f"✅ Video stored with manifest: {new_s3_key}")
                 self._emit_progress({
                     'file': filename,
                     's3_key': new_s3_key,
                     'asset_id': asset_id,
                     'status': 'processing',
-                    'summary': video_summary,
+                    'summary': video_summary,   # enriched summary if available
                     'detected_objects': detected_objects,
                     'frame_count': len(frame_analyses),
                     'timestamp': datetime.now().isoformat()

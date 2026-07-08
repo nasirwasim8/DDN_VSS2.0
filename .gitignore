@@ -55,8 +55,12 @@ Thumbs.db
 
 # Data
 backend/data/faiss_index/
+backend/data/faiss/
 backend/data/storage_config.json.backup
 backend/data/storage_config.json
+backend/data/llm_config.json
+manifest_v1.json
+*.json.backup
 
 # Uploads (if storing locally)
 backend/uploads/
@@ -73,3 +77,10 @@ cache_disabled/
 *.tar.gz
 *.zip
 ddn-multimodal-semantic-search.zip
+
+# Frontend build
+frontend/dist/
+
+# Temp/diagnostic scripts output
+*.log
+logs/

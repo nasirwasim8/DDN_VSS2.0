@@ -28,10 +28,12 @@ const VideoUpload: React.FC = () => {
     const [editForm, setEditForm] = useState<{
         videoSummary: string
         detectedObjects: string
+        enrichedTags: string
         customTags: string
         customSummary: string
-    }>({ videoSummary: '', detectedObjects: '', customTags: '', customSummary: '' })
+    }>({ videoSummary: '', detectedObjects: '', enrichedTags: '', customTags: '', customSummary: '' })
     const [isSaving, setIsSaving] = useState(false)
+    const [showLlmBadge, setShowLlmBadge] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const pollingIntervalsRef = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map())
 
@@ -177,9 +179,14 @@ const VideoUpload: React.FC = () => {
     const startEditing = (video: UploadedVideo) => {
         if (!video.manifest) return
         setEditingVideo(video.asset_id)
+        const enrichedTagsRaw = (video.manifest as any).enriched_tags
+        const enrichedTagsStr = Array.isArray(enrichedTagsRaw)
+            ? enrichedTagsRaw.join(', ')
+            : (typeof enrichedTagsRaw === 'string' ? enrichedTagsRaw : '')
         setEditForm({
             videoSummary: video.manifest.video_summary || '',
             detectedObjects: video.manifest.detected_objects || '',
+            enrichedTags: enrichedTagsStr,
             customTags: video.manifest.custom_tags || '',
             customSummary: video.manifest.custom_summary || ''
         })
@@ -187,7 +194,7 @@ const VideoUpload: React.FC = () => {
 
     const cancelEditing = () => {
         setEditingVideo(null)
-        setEditForm({ videoSummary: '', detectedObjects: '', customTags: '', customSummary: '' })
+        setEditForm({ videoSummary: '', detectedObjects: '', enrichedTags: '', customTags: '', customSummary: '' })
     }
 
     const saveMetadata = async (assetId: string) => {
@@ -198,7 +205,8 @@ const VideoUpload: React.FC = () => {
                 editForm.videoSummary,
                 editForm.detectedObjects,
                 editForm.customTags,
-                editForm.customSummary
+                editForm.customSummary,
+                editForm.enrichedTags  // pass updated enriched tags
             )
 
             // Update local state with new manifest
@@ -589,27 +597,97 @@ const VideoUpload: React.FC = () => {
                                                 </div>
                                             </div>
 
-                                            {/* AI Summary - Editable */}
+                                            {/* AI Summary — shows enriched (AI) or raw (BLIP) */}
                                             {video.manifest.video_summary && (
-                                                <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
-                                                    <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
-                                                        AI-Generated Summary
-                                                    </h4>
+                                                <div className={`rounded-lg p-4 border ${(video.manifest as any).llm_enriched ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800' : 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800'}`}>
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <h4 className={`text-sm font-semibold ${(video.manifest as any).llm_enriched ? 'text-orange-900 dark:text-orange-100' : 'text-blue-900 dark:text-blue-100'}`}>
+                                                            AI-Generated Summary
+                                                        </h4>
+                                                        {(video.manifest as any).llm_enriched && (
+                                                            <>
+                                                                {/* ✨ Enriched badge */}
+                                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-200 dark:bg-orange-800 text-orange-800 dark:text-orange-100">
+                                                                    <Sparkles className="w-3 h-3" /> Enriched
+                                                                </span>
+                                                                {/* Infinia DB badge */}
+                                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-200 border border-orange-300 dark:border-orange-700">
+                                                                    {/* Database SVG icon */}
+                                                                    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                        <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                                                                        <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+                                                                        <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+                                                                    </svg>
+                                                                    Infinia
+                                                                </span>
+                                                                {/* Provider toggle button + badge */}
+                                                                {(video.manifest as any).llm_provider_used && (
+                                                                    <>
+                                                                        <button
+                                                                            onClick={(e) => { e.stopPropagation(); setShowLlmBadge(v => !v); }}
+                                                                            title={showLlmBadge ? 'Hide LLM provider' : 'Show LLM provider'}
+                                                                            className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-xs font-bold border transition-colors ml-1 ${
+                                                                                showLlmBadge
+                                                                                    ? 'bg-neutral-300 dark:bg-neutral-600 text-neutral-700 dark:text-neutral-200 border-neutral-400'
+                                                                                    : 'bg-transparent text-neutral-400 dark:text-neutral-500 border-neutral-300 dark:border-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                                                                            }`}
+                                                                        >ⓘ</button>
+                                                                        {showLlmBadge && (
+                                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400 border border-neutral-200 dark:border-neutral-700 ml-auto">
+                                                                                via {(video.manifest as any).llm_provider_used === 'openai' ? '🌐 OpenAI' : '🖥 Ollama'}
+                                                                            </span>
+                                                                        )}
+                                                                    </>
+                                                                )}
+                                                            </>
+                                                        )}
+
+                                                    </div>
                                                     {editingVideo === video.asset_id ? (
                                                         <textarea
                                                             value={editForm.videoSummary}
                                                             onChange={(e) => setEditForm(prev => ({ ...prev, videoSummary: e.target.value }))}
                                                             onClick={(e) => e.stopPropagation()}
                                                             rows={3}
-                                                            className="w-full px-3 py-2 text-sm rounded-lg border border-blue-300 dark:border-blue-700 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 focus:ring-2 focus:ring-blue-500"
+                                                            className="w-full px-3 py-2 text-sm rounded-lg border border-orange-300 dark:border-orange-700 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 focus:ring-2 focus:ring-orange-500"
                                                         />
                                                     ) : (
-                                                        <p className="text-sm text-blue-800 dark:text-blue-200">
+                                                        <p className={`text-sm ${(video.manifest as any).llm_enriched ? 'text-orange-900 dark:text-orange-100' : 'text-blue-800 dark:text-blue-200'}`}>
                                                             {video.manifest.video_summary}
                                                         </p>
                                                     )}
+                                                    {/* Scene context + key events */}
+                                                    {(video.manifest as any).llm_enriched && (
+                                                        <div className="mt-3 flex flex-wrap gap-2 items-center">
+                                                            {(video.manifest as any).scene_type && (
+                                                                <span className="px-2 py-1 rounded-md text-xs bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300 font-medium">
+                                                                    📍 {(video.manifest as any).scene_type.replace(/_/g, ' ')}
+                                                                </span>
+                                                            )}
+                                                            {((video.manifest as any).key_events || []).slice(0, 3).map((ev: string, i: number) => (
+                                                                <span key={i} className="px-2 py-1 rounded-md text-xs bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300">
+                                                                    ⚡ {ev}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                    {/* Search-optimized tags */}
+                                                    {(video.manifest as any).llm_enriched && ((video.manifest as any).enriched_tags || []).length > 0 && (
+                                                        <div className="mt-3">
+                                                            <p className="text-xs text-orange-600 dark:text-orange-400 mb-1.5 font-medium">Search Tags</p>
+                                                            <div className="flex flex-wrap gap-1.5">
+                                                                {((video.manifest as any).enriched_tags as string[]).map((tag, i) => (
+                                                                    <span key={i} className="px-2 py-0.5 rounded-full text-xs bg-orange-200 dark:bg-orange-800 text-orange-800 dark:text-orange-100">
+                                                                        #{tag}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
+
+
 
                                             {/* Custom Summary - Editable */}
                                             {video.manifest.custom_summary && (
@@ -633,39 +711,59 @@ const VideoUpload: React.FC = () => {
                                                 </div>
                                             )}
 
-                                            {/* Tags */}
+                                            {/* Tags — prefer LLM search tags when enriched */}
                                             <div className="grid md:grid-cols-2 gap-4">
-                                                {video.manifest.detected_objects && (
-                                                    <div>
-                                                        <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-2">
-                                                            AI-Detected Objects
-                                                        </h4>
-                                                        <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-2">
-                                                            Objects identified in video keyframes for semantic search and filtering
-                                                        </p>
-                                                        {editingVideo === video.asset_id ? (
-                                                            <input
-                                                                type="text"
-                                                                value={editForm.detectedObjects}
-                                                                onChange={(e) => setEditForm(prev => ({ ...prev, detectedObjects: e.target.value }))}
-                                                                onClick={(e) => e.stopPropagation()}
-                                                                placeholder="e.g., car, road, trees"
-                                                                className="w-full px-3 py-2 text-sm rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 focus:ring-2 focus:ring-green-500"
-                                                            />
-                                                        ) : (
-                                                            <div className="flex flex-wrap gap-2">
-                                                                {video.manifest.detected_objects.split(',').map((tag, idx) => (
-                                                                    <span
-                                                                        key={idx}
-                                                                        className="px-2 py-1 bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-300 rounded-md text-xs"
-                                                                    >
-                                                                        {tag.trim()}
-                                                                    </span>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
+                                                {(() => {
+                                                    const enrichedTags: string[] = Array.isArray((video.manifest as any).enriched_tags)
+                                                        ? (video.manifest as any).enriched_tags
+                                                        : [];
+                                                    const rawTagStr = video.manifest.detected_objects || '';
+                                                    const rawTags = rawTagStr.split(',').map((t: string) => t.trim()).filter(Boolean);
+                                                    const isEnriched = enrichedTags.length > 0;
+                                                    const hasTags = isEnriched ? true : rawTags.length > 0;
+
+                                                    return hasTags ? (
+                                                        <div>
+                                                            <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-2">
+                                                                {isEnriched ? 'AI Search Tags' : 'AI-Detected Objects'}
+                                                            </h4>
+                                                            <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-2">
+                                                                {isEnriched
+                                                                    ? 'Semantic search tags generated by LLM for precise filtering'
+                                                                    : 'Objects identified in video keyframes for semantic search and filtering'}
+                                                            </p>
+                                                            {editingVideo === video.asset_id ? (
+                                                                <input
+                                                                    type="text"
+                                                                    value={isEnriched ? editForm.enrichedTags : editForm.detectedObjects}
+                                                                    onChange={(e) => setEditForm(prev => isEnriched
+                                                                        ? { ...prev, enrichedTags: e.target.value }
+                                                                        : { ...prev, detectedObjects: e.target.value }
+                                                                    )}
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                    placeholder={isEnriched ? "e.g., #office, #business meeting, #teamwork" : "e.g., car, road, trees"}
+                                                                    className={`w-full px-3 py-2 text-sm rounded-lg border bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 focus:ring-2 ${isEnriched ? 'border-orange-300 focus:ring-orange-400' : 'border-neutral-300 dark:border-neutral-600 focus:ring-green-500'}`}
+                                                                />
+                                                            ) : (
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {(isEnriched ? enrichedTags : rawTags).map((tag: string, idx: number) => (
+                                                                        <span
+                                                                            key={idx}
+                                                                            className={`px-2 py-1 rounded-md text-xs ${
+                                                                                isEnriched
+                                                                                    ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300'
+                                                                                    : 'bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-300'
+                                                                            }`}
+                                                                        >
+                                                                            {isEnriched ? `#${tag.replace(/^#/, '')}` : tag}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ) : null;
+                                                })()}
+
                                                 {video.manifest.custom_tags && (
                                                     <div>
                                                         <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-2">

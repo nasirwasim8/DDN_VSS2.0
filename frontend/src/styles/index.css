@@ -935,6 +935,44 @@ body {
     display: none;
   }
 
+  /* Slim styled scrollbar for content areas */
+  .scrollbar-styled {
+    scrollbar-width: thin;
+    scrollbar-color: var(--neutral-300) transparent;
+    overflow-y: auto;
+  }
+
+  .scrollbar-styled::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .scrollbar-styled::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 3px;
+  }
+
+  .scrollbar-styled::-webkit-scrollbar-thumb {
+    background: var(--neutral-300);
+    border-radius: 3px;
+    transition: background 0.2s ease;
+  }
+
+  .scrollbar-styled::-webkit-scrollbar-thumb:hover {
+    background: var(--neutral-400);
+  }
+
+  [data-theme="dark"] .scrollbar-styled {
+    scrollbar-color: var(--border-default) transparent;
+  }
+
+  [data-theme="dark"] .scrollbar-styled::-webkit-scrollbar-thumb {
+    background: var(--border-default);
+  }
+
+  [data-theme="dark"] .scrollbar-styled::-webkit-scrollbar-thumb:hover {
+    background: var(--border-strong);
+  }
+
   /* -------------------------------------------------------------------------
      ABOUT PAGE - Full bleed layout
      ------------------------------------------------------------------------- */

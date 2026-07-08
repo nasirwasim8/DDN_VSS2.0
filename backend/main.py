@@ -38,6 +38,17 @@ async def lifespan(app: FastAPI):
     print("  Powered by DDN INFINIA & NVIDIA GPU Technology")
     print("=" * 60)
 
+    # ── Load persisted LLM config (OpenAI key, provider, etc.) ───────────────
+    # This ensures the key saved via the UI survives app restarts on Ubuntu.
+    try:
+        from app.api.routes import _load_llm_config_from_disk
+        _load_llm_config_from_disk()
+        llm_provider = os.getenv("LLM_PROVIDER", "auto")
+        openai_key_set = bool(os.getenv("OPENAI_API_KEY"))
+        print(f"🤖 LLM config loaded: provider={llm_provider} openai_key_set={openai_key_set}")
+    except Exception as e:
+        print(f"⚠️  Could not load persisted LLM config: {e}")
+
     print("\nInitializing AI models...")
     # Pre-load models (this will download on first run)
     get_image_analyzer()

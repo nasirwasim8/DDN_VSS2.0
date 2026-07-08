@@ -1,0 +1,1481 @@
+<!DOCTYPE html>
+<!-- GTC 2026 Deck — DDN × NVIDIA — Standalone HTML -->
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DDN × NVIDIA — GTC 2026 Deck</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f1f5f9;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column
+    }
+
+    /* Zoom is set dynamically by JS below based on screen size */
+    /* Manual override: set a fixed number here if needed */
+    /* html { zoom: 1.8; } */
+
+    #nav {
+      background: #fff;
+      border-bottom: 1px solid #e2e8f0;
+      padding: 0 24px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      z-index: 10
+    }
+
+    #nav .brand {
+      font-size: 15px;
+      font-weight: 700;
+      color: #ED2738;
+      letter-spacing: .08em
+    }
+
+    #nav .slide-title {
+      font-size: 14px;
+      color: #94a3b8
+    }
+
+    #nav .controls {
+      display: flex;
+      align-items: center;
+      gap: 8px
+    }
+
+    #nav button {
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 14px;
+      color: #64748b;
+      transition: background .15s
+    }
+
+    #nav button:hover {
+      background: #f1f5f9;
+      color: #1e293b
+    }
+
+    #nav button.active {
+      background: #ED2738;
+      color: #fff
+    }
+
+    /* Progress */
+    #progress-bar {
+      height: 3px;
+      background: linear-gradient(90deg, #ED2738, #76B900);
+      transition: width .3s;
+      flex-shrink: 0
+    }
+
+    /* Slide area */
+    #stage {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+      min-height: 0
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      display: none !important;
+      animation: fadeIn .3s ease;
+      overflow-y: auto;
+      overflow-x: hidden
+    }
+
+    .slide.active {
+      display: flex !important
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateX(40px)
+      }
+
+      to {
+        opacity: 1;
+        transform: translateX(0)
+      }
+    }
+
+    /* Dots */
+    #dots {
+      display: flex;
+      gap: 6px;
+      align-items: center
+    }
+
+    #dots button {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      border: none;
+      background: #e2e8f0;
+      cursor: pointer;
+      transition: all .2s;
+      padding: 0
+    }
+
+    #dots button.active {
+      background: #ED2738;
+      width: 20px;
+      border-radius: 4px
+    }
+
+    /* Arrow nav */
+    #prev,
+    #next {
+      position: fixed;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(255, 255, 255, .85);
+      backdrop-filter: blur(4px);
+      border: 1.5px solid #e2e8f0;
+      border-radius: 12px;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 18px;
+      color: #475569;
+      z-index: 20;
+      transition: all .15s;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, .08)
+    }
+
+    #prev {
+      left: 12px
+    }
+
+    #next {
+      right: 12px
+    }
+
+    #prev:hover,
+    #next:hover {
+      background: #fff;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, .12);
+      color: #ED2738
+    }
+
+    /* ── Shared layout helpers ── */
+    .p10 {
+      padding: 40px
+    }
+
+    .flex {
+      display: flex
+    }
+
+    .fcol {
+      flex-direction: column
+    }
+
+    .flex1 {
+      flex: 1
+    }
+
+    .gap3 {
+      gap: 12px
+    }
+
+    .gap4 {
+      gap: 16px
+    }
+
+    .gap6 {
+      gap: 24px
+    }
+
+    .grid2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px
+    }
+
+    .grid3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px
+    }
+
+    .grid4 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+      gap: 12px
+    }
+
+    .card {
+      border-radius: 16px;
+      padding: 20px
+    }
+
+    .slide-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px
+    }
+
+    .slide-num {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #ED2738;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0
+    }
+
+    .slide-label {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: #ED2738
+    }
+
+    h2 {
+      font-size: 40px;
+      font-weight: 900;
+      color: #0f172a;
+      line-height: 1.2;
+      margin-bottom: 6px
+    }
+
+    h2 span {
+      color: #ED2738
+    }
+
+    .sub {
+      font-size: 16px;
+      color: #94a3b8;
+      margin-bottom: 20px
+    }
+
+    .bullet {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 15px;
+      color: #475569;
+      line-height: 1.5
+    }
+
+    .bullet::before {
+      content: "→";
+      flex-shrink: 0;
+      font-weight: 700
+    }
+
+    /* Stat badge */
+    .stat {
+      border-radius: 14px;
+      padding: 20px 24px;
+      text-align: center
+    }
+
+    .stat .val {
+      font-size: 42px;
+      font-weight: 900
+    }
+
+    .stat .lbl {
+      font-size: 14px;
+      color: #64748b;
+      margin-top: 4px;
+      font-weight: 500
+    }
+
+    /* Pills */
+    .pill {
+      padding: 7px 16px;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center
+    }
+
+    /* Video slot */
+    .video-slot {
+      border-radius: 16px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column
+    }
+
+    .vs-header {
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid rgba(0, 0, 0, .06)
+    }
+
+    .vs-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0
+    }
+
+    .vs-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #0f172a
+    }
+
+    .vs-desc {
+      font-size: 11px;
+      color: #64748b
+    }
+
+    .vs-badge {
+      margin-left: auto;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 999px
+    }
+
+    .vs-body {
+      flex: 1;
+      min-height: 180px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0f172a;
+      position: relative;
+      cursor: pointer
+    }
+
+    .vs-body video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      position: absolute;
+      inset: 0
+    }
+
+    .vs-upload {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 20px;
+      border-radius: 12px;
+      border: 1.5px dashed rgba(255, 255, 255, .2);
+      background: rgba(255, 255, 255, .04);
+      cursor: pointer;
+      transition: all .2s
+    }
+
+    .vs-upload:hover {
+      background: rgba(255, 255, 255, .08);
+      border-color: rgba(255, 255, 255, .35)
+    }
+
+    .vs-upload-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, .1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px
+    }
+
+    .vs-upload span {
+      font-size: 12px;
+      color: rgba(255, 255, 255, .5)
+    }
+
+    .vs-controls {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(to top, rgba(0, 0, 0, .7), transparent)
+    }
+
+    .vs-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, .2);
+      border: none;
+      cursor: pointer;
+      color: #fff;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background .15s
+    }
+
+    .vs-btn:hover {
+      background: rgba(255, 255, 255, .35)
+    }
+
+    /* ── Slide 1 VSS Image ── */
+    #s1 {
+      background: #000;
+      padding: 0
+    }
+
+    /* ── Slide 2 Cover ── */
+    #s2 {
+      background: #fff
+    }
+
+    #s2 .left {
+      width: 300px;
+      flex-shrink: 0;
+      background: linear-gradient(160deg, #1e293b 60%, #0f172a);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 36px
+    }
+
+    #s2 .dots-br {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-bottom: 24px
+    }
+
+    #s2 .dot-r {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ED2738
+    }
+
+    #s2 .dot-g {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #76B900
+    }
+
+    #s2 .right {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 56px
+    }
+
+    #s2 .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 14px;
+      border-radius: 999px;
+      background: #FFF8E6;
+      border: 1px solid rgba(245, 158, 11, .2);
+      margin-bottom: 20px
+    }
+
+    #s2 .eyebrow span {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: #F59E0B
+    }
+
+    #s2 h1 {
+      font-size: 72px;
+      font-weight: 900;
+      line-height: 1.1;
+      color: #0f172a;
+      margin-bottom: 4px
+    }
+
+    #s2 h1 em {
+      font-style: normal;
+      color: #ED2738
+    }
+
+    #s2 p {
+      font-size: 18px;
+      color: #64748b;
+      line-height: 1.7;
+      max-width: 480px;
+      margin-bottom: 28px
+    }
+
+    .feature-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px
+    }
+
+    /* ── Pipeline ── */
+    .pipeline {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      overflow-x: auto;
+      margin-bottom: 20px;
+      flex-shrink: 0
+    }
+
+    .pipe-step {
+      border-radius: 14px;
+      padding: 12px 14px;
+      flex-shrink: 0
+    }
+
+    .pipe-num {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      margin-bottom: 4px
+    }
+
+    .pipe-name {
+      font-size: 16px;
+      font-weight: 700;
+      color: #1e293b;
+      line-height: 1.2
+    }
+
+    .pipe-sub {
+      font-size: 13px;
+      color: #64748b;
+      margin-top: 2px
+    }
+
+    .pipe-arrow {
+      font-size: 18px;
+      color: #cbd5e1;
+      flex-shrink: 0;
+      padding: 0 4px
+    }
+
+    /* dark left panel (closes/closing) */
+    .dark-panel {
+      width: 300px;
+      flex-shrink: 0;
+      background: linear-gradient(160deg, #1e293b 60%, #0f172a);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 36px
+    }
+
+    /* fullscreen hint */
+    #hint {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 23, 42, .7);
+      color: rgba(255, 255, 255, .7);
+      font-size: 14px;
+      padding: 8px 18px;
+      border-radius: 999px;
+      backdrop-filter: blur(4px);
+      pointer-events: none;
+      z-index: 30
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Top nav -->
+  <div id="nav">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span class="brand">GTC 2026 DECK</span>
+      <span style="color:#cbd5e1">·</span>
+      <span class="slide-title" id="slide-title-bar">Cover</span>
+    </div>
+    <div id="dots"></div>
+    <div class="controls">
+      <button id="btn-fs">⛶ Fullscreen</button>
+      <span style="font-size:12px;color:#94a3b8" id="counter">1 / 11</span>
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div id="progress-bar" style="width:10%"></div>
+
+  <!-- Slides -->
+  <div id="stage">
+
+    <!-- ═══ SLIDE 1 — VSS IMAGE ═══ -->
+    <div class="slide active" id="s1" style="background:#000;padding:0">
+      <img src="VSS.jpg" alt="DDN VSS" style="width:100%;height:100%;object-fit:contain;display:block">
+    </div>
+
+    <!-- ═══ SLIDE 2 — COVER ═══ -->
+    <div class="slide" id="s2">
+      <div class="left">
+        <div>
+          <div class="dots-br">
+            <div class="dot-r"></div>
+            <div class="dot-g"></div><span style="color:rgba(255,255,255,.3);font-size:11px;margin-left:8px">GTC
+              2026</span>
+          </div>
+          <div style="font-size:40px;font-weight:900;color:#fff">DDN</div>
+          <div style="font-size:16px;font-weight:300;color:rgba(255,255,255,.4);margin-bottom:16px">INFINIA</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+            <div style="height:1px;width:24px;background:rgba(255,255,255,.2)"></div><span
+              style="color:rgba(255,255,255,.3);font-size:12px">×</span>
+            <div style="height:1px;width:24px;background:rgba(255,255,255,.2)"></div>
+          </div>
+          <div style="font-size:26px;font-weight:900;color:#76B900">NVIDIA</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:4px">VSS Blueprint</div>
+        </div>
+        <div>
+          <div style="font-size:10px;color:rgba(255,255,255,.3);letter-spacing:.12em;text-transform:uppercase">DDN
+            Theatre Booth</div>
+          <div style="font-size:10px;color:rgba(255,255,255,.2);margin-top:4px">Build.DDN:VSS · Multimodal Semantic
+            Video Search</div>
+        </div>
+      </div>
+      <div class="right">
+        <div class="eyebrow"><span>✦ GTC 2026 Showcase</span></div>
+        <h1>From Video Chaos<br>to <em>Instant</em><br>Intelligence.</h1>
+        <p>AI-powered semantic search across petabyte-scale video — natural language queries, sub-2-second results, no
+          separate vector database.</p>
+        <div class="feature-pills">
+          <span class="pill" style="background:#FFF0F1;color:#ED2738;border:1px solid rgba(237,39,56,.15)">GPU
+            Accelerated</span>
+          <span class="pill" style="background:#F4FBEA;color:#76B900;border:1px solid rgba(118,185,0,.15)">Multimodal
+            AI</span>
+          <span class="pill" style="background:#EFF6FF;color:#3B82F6;border:1px solid rgba(59,130,246,.15)">DDN
+            Native</span>
+          <span class="pill" style="background:#FFFBEB;color:#F59E0B;border:1px solid rgba(245,158,11,.15)">LLM
+            Enriched</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ SLIDE 2 — PROBLEM ═══ -->
+    <div class="slide flex fcol p10" id="s2" style="background:#fff">
+      <div class="slide-meta">
+        <div class="slide-num">02</div>
+        <div class="slide-label">The Challenge</div>
+      </div>
+      <h2>The Problem with <span>Video Data</span></h2>
+      <p class="sub">Enterprises sit on petabytes of dark, untagged video. AI teams burn weeks finding edge cases for
+        model fine-tuning.</p>
+      <div class="grid3 flex1">
+        <div class="card" style="background:#FFF0F1;border:1.5px solid rgba(237,39,56,.15)">
+          <div style="font-size:32px;margin-bottom:12px">🕒</div>
+          <div style="font-size:14px;font-weight:700;color:#ED2738;margin-bottom:8px">Hours of Manual Search</div>
+          <p style="font-size:12px;color:#64748b;line-height:1.6">Analysts scrub through footage frame-by-frame.
+            Traditional CCTV has no semantic awareness. Search = play → scrub → repeat.</p>
+        </div>
+        <div class="card" style="background:#FFFBEB;border:1.5px solid rgba(245,158,11,.15)">
+          <div style="font-size:32px;margin-bottom:12px">💸</div>
+          <div style="font-size:14px;font-weight:700;color:#F59E0B;margin-bottom:8px">$2M–$5M Wasted Annually</div>
+          <p style="font-size:12px;color:#64748b;line-height:1.6">Manual annotation tooling, vector DB licenses, cloud
+            egress bills, and S3 cold-storage tiers compound into runaway cost.</p>
+        </div>
+        <div class="card" style="background:#F5F3FF;border:1.5px solid rgba(139,92,246,.15)">
+          <div style="font-size:32px;margin-bottom:12px">🔒</div>
+          <div style="font-size:14px;font-weight:700;color:#8B5CF6;margin-bottom:8px">95% Dark Data</div>
+          <p style="font-size:12px;color:#64748b;line-height:1.6">The vast majority of enterprise video is siloed,
+            unindexed, and invisible to AI training pipelines — a cost center with zero intelligence value.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ SLIDE 3 — SOLUTION ═══ -->
+    <div class="slide flex fcol p10" id="s3" style="background:#fff">
+      <div class="slide-meta">
+        <div class="slide-num">03</div>
+        <div class="slide-label">The Solution</div>
+      </div>
+      <h2>Type It. Find It. <span>Act On It.</span></h2>
+      <div
+        style="background:#F4FBEA;border:1.5px solid rgba(118,185,0,.35);border-radius:14px;padding:14px 18px;display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-shrink:0">
+        <span style="font-size:20px">🔍</span>
+        <span style="font-size:14px;color:#334155;font-weight:500">"White SUV near Gate 3 between 14:00 and
+          20:00"</span>
+        <span class="pill" style="margin-left:auto;background:rgba(118,185,0,.12);color:#76B900">Results in
+          &lt;2s</span>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;flex-shrink:0">
+        <span class="pill" style="background:#ECFDF5;color:#10B981">#vehicle_presence</span>
+        <span class="pill" style="background:#FFF0F1;color:#ED2738">#restricted_access</span>
+        <span class="pill" style="background:#FFFBEB;color:#F59E0B">#crowd_density_high</span>
+        <span class="pill" style="background:#EFF6FF;color:#3B82F6">#low_visibility_fog</span>
+        <span class="pill" style="background:#F5F3FF;color:#8B5CF6">#pedestrian_zone</span>
+        <span class="pill" style="background:#F4FBEA;color:#76B900">#gate3_perimeter</span>
+      </div>
+      <div style="height:1px;background:#f1f5f9;margin-bottom:16px;flex-shrink:0"></div>
+      <div class="grid3 flex1">
+        <div class="card" style="background:#F4FBEA;border:1.5px solid rgba(118,185,0,.2)">
+          <div style="font-size:24px;margin-bottom:8px">🧠</div>
+          <div style="font-size:13px;font-weight:700;color:#76B900;margin-bottom:6px">Semantic Understanding</div>
+          <p style="font-size:11px;color:#64748b;line-height:1.5">Maps synonyms automatically — "car crash" finds
+            "vehicle collision". Understands scenes, objects, behaviors, and context.</p>
+        </div>
+        <div class="card" style="background:#FFF0F1;border:1.5px solid rgba(237,39,56,.2)">
+          <div style="font-size:24px;margin-bottom:8px">⚡</div>
+          <div style="font-size:13px;font-weight:700;color:#ED2738;margin-bottom:6px">GPU-Accelerated AI</div>
+          <p style="font-size:11px;color:#64748b;line-height:1.5">BLIP captions every keyframe. CLIP creates semantic
+            embeddings co-located with video in DDN Infinia. Zero data movement.</p>
+        </div>
+        <div class="card" style="background:#EFF6FF;border:1.5px solid rgba(59,130,246,.2)">
+          <div style="font-size:24px;margin-bottom:8px">💬</div>
+          <div style="font-size:13px;font-weight:700;color:#3B82F6;margin-bottom:6px">LLM Enrichment</div>
+          <p style="font-size:11px;color:#64748b;line-height:1.5">GPT-4o-mini or Ollama 7B generates narrative summaries
+            and AI search hashtags automatically on every upload.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ SLIDE 4 — ARCHITECTURE ═══ -->
+    <div class="slide flex fcol p10" id="s4" style="background:#fff">
+      <div class="slide-meta">
+        <div class="slide-num">04</div>
+        <div class="slide-label">Architecture</div>
+      </div>
+      <h2>How It Works <span>Under the Hood</span></h2>
+      <p class="sub">Built on NVIDIA VSS Blueprint · Powered by DDN Infinia</p>
+      <div class="pipeline">
+        <div class="pipe-step" style="background:#FFF0F1;border:1.5px solid #ED2738">
+          <div class="pipe-num" style="color:#ED2738">01</div>
+          <div class="pipe-name">Video Upload</div>
+          <div class="pipe-sub">MP4 / MOV drag-in</div>
+        </div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step" style="background:#FFFBEB;border:1.5px solid #F59E0B">
+          <div class="pipe-num" style="color:#F59E0B">02</div>
+          <div class="pipe-name">GPU Chunking</div>
+          <div class="pipe-sub">Scene segmentation</div>
+        </div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step" style="background:#F4FBEA;border:1.5px solid #76B900">
+          <div class="pipe-num" style="color:#76B900">03</div>
+          <div class="pipe-name">AI Analysis</div>
+          <div class="pipe-sub">BLIP + CLIP embeds</div>
+        </div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step" style="background:#EFF6FF;border:1.5px solid #3B82F6">
+          <div class="pipe-num" style="color:#3B82F6">04</div>
+          <div class="pipe-name">LLM Enrich</div>
+          <div class="pipe-sub">GPT-4o / Ollama 7B</div>
+        </div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step" style="background:#ECFDF5;border:1.5px solid #10B981">
+          <div class="pipe-num" style="color:#10B981">05</div>
+          <div class="pipe-name">DDN Infinia</div>
+          <div class="pipe-sub">Metadata + vectors</div>
+        </div>
+      </div>
+      <div
+        style="background:#F4FBEA;border:1.5px solid rgba(118,185,0,.35);border-radius:16px;padding:16px;margin-bottom:16px;flex-shrink:0">
+        <div style="font-size:13px;font-weight:700;color:#76B900;margin-bottom:10px">★ DDN Infinia — The Intelligence
+          Layer</div>
+        <div class="grid2" style="gap:8px">
+          <div class="bullet" style="font-size:11px"><span>Distributed key-value store — unlimited metadata
+              capacity</span></div>
+          <div class="bullet" style="font-size:11px"><span>GPU-Direct NVMe: disk → GPU with zero CPU bottleneck</span>
+          </div>
+          <div class="bullet" style="font-size:11px"><span>No separate vector DB — CLIP embeddings stored
+              natively</span></div>
+          <div class="bullet" style="font-size:11px"><span>Linear scale: 1PB and 100PB respond identically</span></div>
+        </div>
+      </div>
+      <div class="grid4">
+        <div class="stat" style="background:#FFF0F1;border:1.5px solid rgba(237,39,56,.15)">
+          <div class="val" style="color:#ED2738">~85%</div>
+          <div class="lbl">GPU Utilization</div>
+        </div>
+        <div class="stat" style="background:#F4FBEA;border:1.5px solid rgba(118,185,0,.15)">
+          <div class="val" style="color:#76B900">&lt;2s</div>
+          <div class="lbl">Query Latency</div>
+        </div>
+        <div class="stat" style="background:#EFF6FF;border:1.5px solid rgba(59,130,246,.15)">
+          <div class="val" style="color:#3B82F6">$0</div>
+          <div class="lbl">Vector DB Cost</div>
+        </div>
+        <div class="stat" style="background:#ECFDF5;border:1.5px solid rgba(16,185,129,.15)">
+          <div class="val" style="color:#10B981">∞</div>
+          <div class="lbl">Scale Ceiling</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ SLIDE 5 — INGESTION DEMO ═══ -->
+    <div class="slide flex fcol p10" id="s5" style="background:#fff">
+      <div class="slide-meta">
+        <div class="slide-num">05</div>
+        <div class="slide-label">Demo 01 · Ingestion</div>
+      </div>
+      <h2>Video <span>Ingestion</span> Pipeline</h2>
+      <p class="sub">Upload any video → GPU chunking → AI analysis → LLM enrichment → stored in DDN Infinia with full
+        metadata</p>
+      <div class="flex gap6 flex1">
+        <div style="width:52%;flex-shrink:0">
+          <div class="video-slot" style="background:#FFF8F8;border:1.5px solid rgba(237,39,56,.2);height:100%">
+            <div class="vs-header">
+              <div class="vs-icon" style="background:rgba(237,39,56,.1);color:#ED2738">📥</div>
+              <div>
+                <div class="vs-title">Ingestion Demo</div>
+                <div class="vs-desc">Upload video & watch AI processing</div>
+              </div>
+              <div class="vs-badge" style="background:rgba(237,39,56,.1);color:#ED2738">Demo 01</div>
+            </div>
+            <div class="vs-body" id="vb1" onclick="document.getElementById('vf1').click()">
+              <video id="vv1" loop style="display:none"></video>
+              <div class="vs-upload" id="vu1">
+                <div class="vs-upload-icon">📁</div>
+                <span>Click or drag a video file here</span>
+              </div>
+              <div class="vs-controls" id="vc1" style="display:none">
+                <button class="vs-btn" onclick="event.stopPropagation();togglePlay('vv1','vp1')">▶</button>
+                <button class="vs-btn" onclick="event.stopPropagation();toggleMute('vv1','vm1')">🔊</button>
+                <span id="vp1" style="font-size:10px;color:rgba(255,255,255,.5);margin-left:4px">Paused</span>
+                <span style="margin-left:auto;font-size:10px;color:rgba(255,255,255,.4)">Live Demo</span>
+              </div>
+            </div>
+            <input type="file" id="vf1" accept="video/*" style="display:none"
+              onchange="loadVideo('vv1','vu1','vc1',this)">
+          </div>
+        </div>
+        <div class="flex fcol gap3 flex1">
+          <div class="card" style="background:rgba(237,39,56,.05);border:1px solid rgba(237,39,56,.15)">
+            <div style="display:flex;align-items:flex-start;gap:10px">
+              <div
+                style="width:22px;height:22px;border-radius:50%;background:#ED2738;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                1</div>
+              <div>
+                <div style="font-size:13px;font-weight:700;color:#1e293b">Upload Trigger</div>
+                <div style="font-size:11px;color:#64748b;margin-top:3px;line-height:1.5">Video dropped into the Media
+                  Intelligence page — stored instantly to DDN Infinia raw bucket.</div>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="background:rgba(245,158,11,.05);border:1px solid rgba(245,158,11,.15)">
+            <div style="display:flex;align-items:flex-start;gap:10px">
+              <div
+                style="width:22px;height:22px;border-radius:50%;background:#F59E0B;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                2</div>
+              <div>
+                <div style="font-size:13px;font-weight:700;color:#1e293b">GPU Frame Analysis</div>
+                <div style="font-size:11px;color:#64748b;margin-top:3px;line-height:1.5">BLIP generates captions for
+                  every keyframe. CLIP creates 512-dim semantic embeddings — all on GPU, co-located with storage.</div>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="background:rgba(118,185,0,.05);border:1px solid rgba(118,185,0,.15)">
+            <div style="display:flex;align-items:flex-start;gap:10px">
+              <div
+                style="width:22px;height:22px;border-radius:50%;background:#76B900;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                3</div>
+              <div>
+                <div style="font-size:13px;font-weight:700;color:#1e293b">LLM Enrichment</div>
+                <div style="font-size:11px;color:#64748b;margin-top:3px;line-height:1.5">GPT-4o-mini or Ollama 7B
+                  synthesizes captions into a narrative summary and generates AI search hashtags.</div>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="background:rgba(59,130,246,.05);border:1px solid rgba(59,130,246,.15)">
+            <div style="display:flex;align-items:flex-start;gap:10px">
+              <div
+                style="width:22px;height:22px;border-radius:50%;background:#3B82F6;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                4</div>
+              <div>
+                <div style="font-size:13px;font-weight:700;color:#1e293b">Manifest Written</div>
+                <div style="font-size:11px;color:#64748b;margin-top:3px;line-height:1.5">All metadata — summary,
+                  enriched tags, embeddings, chunk paths — stored natively on the Infinia object. No separate DB.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ SLIDE 6 — HUMAN IN THE LOOP ═══ -->
+    <div class="slide flex fcol p10" id="s6" style="background:#fff">
+      <div class="slide-meta">
+        <div class="slide-num">06</div>
+        <div class="slide-label">Demo 02 · Human in the Loop</div>
+      </div>
+      <h2>Human-in-the-Loop <span>Curation</span></h2>
+      <p class="sub">Review AI-generated tags, refine summaries, add context — every edit persists to DDN Infinia
+        instantly</p>
+      <div class="flex gap6 flex1">
+        <div style="width:52%;flex-shrink:0">
+          <div class="video-slot" style="background:#F8F5FF;border:1.5px solid rgba(139,92,246,.2);height:100%">
+            <div class="vs-header">
+              <div class="vs-icon" style="background:rgba(139,92,246,.1);color:#8B5CF6">🧑‍💼</div>
+              <div>
+                <div class="vs-title">Human in the Loop Demo</div>
+                <div class="vs-desc">Edit AI tags & summaries on the video card</div>
+              </div>
+              <div class="vs-badge" style="background:rgba(139,92,246,.1);color:#8B5CF6">Demo 02</div>
+            </div>
+            <div class="vs-body" id="vb2" onclick="document.getElementById('vf2').click()">
+              <video id="vv2" loop style="display:none"></video>
+              <div class="vs-upload" id="vu2">
+                <div class="vs-upload-icon">📁</div><span>Click or drag a video file here</span>
+              </div>
+              <div class="vs-controls" id="vc2" style="display:none">
+                <button class="vs-btn" onclick="event.stopPropagation();togglePlay('vv2','vp2')">▶</button>
+                <button class="vs-btn" onclick="event.stopPropagation();toggleMute('vv2','vm2')">🔊</button>
+                <span id="vp2" style="font-size:10px;color:rgba(255,255,255,.5);margin-left:4px">Paused</span>
+                <span style="margin-left:auto;font-size:10px;color:rgba(255,255,255,.4)">Live Demo</span>
+              </div>
+            </div>
+            <input type="file" id="vf2" accept="video/*" style="display:none"
+              onchange="loadVideo('vv2','vu2','vc2',this)">
+          </div>
+        </div>
+        <div class="flex fcol gap4 flex1">
+          <div class="card" style="background:#F8F5FF;border:1.5px solid rgba(139,92,246,.15)">
+            <div style="font-size:13px;font-weight:700;color:#8B5CF6;margin-bottom:10px">What the Analyst Sees</div>
+            <div style="display:flex;flex-direction:column;gap:7px">
+              <div style="font-size:12px;color:#475569">🔮&nbsp; AI-generated summary shown in orange "Enriched" card
+              </div>
+              <div style="font-size:12px;color:#475569">#️⃣&nbsp; LLM search tags displayed as orange hashtag pills
+              </div>
+              <div style="font-size:12px;color:#475569">✏️&nbsp; Click Edit to modify tags or summary inline</div>
+              <div style="font-size:12px;color:#475569">💾&nbsp; Save writes directly back to DDN Infinia manifest</div>
+            </div>
+          </div>
+          <div class="card" style="background:#F4FBEA;border:1.5px solid rgba(118,185,0,.15)">
+            <div style="font-size:13px;font-weight:700;color:#76B900;margin-bottom:8px">Why This Matters</div>
+            <p style="font-size:12px;color:#475569;line-height:1.6">Ground-truth annotations from domain experts improve
+              search precision over time. AI does the heavy lifting; humans add the context models miss. All corrections
+              are stored as enriched metadata — searchable immediately.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ SLIDE 7 — SEARCH ═══ -->
+    <div class="slide flex fcol p10" id="s7" style="background:#fff">
+      <div class="slide-meta">
+        <div class="slide-num">07</div>
+        <div class="slide-label">Demo 03 · Semantic Search</div>
+      </div>
+      <h2>Natural Language <span>Search</span></h2>
+      <p class="sub">Search the entire video archive with plain English — results in under 2 seconds, at any scale</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;flex-shrink:0">
+        <span class="pill" style="background:#f1f5f9;color:#475569">"Person in red jacket near entrance"</span>
+        <span class="pill" style="background:#f1f5f9;color:#475569">"Crowded corridor with bags"</span>
+        <span class="pill" style="background:#f1f5f9;color:#475569">"Empty parking lot at night"</span>
+        <span class="pill" style="background:#f1f5f9;color:#475569">"Two people arguing"</span>
+      </div>
+      <div class="flex gap6 flex1">
+        <div style="width:52%;flex-shrink:0">
+          <div class="video-slot" style="background:#F0F7FF;border:1.5px solid rgba(59,130,246,.2);height:100%">
+            <div class="vs-header">
+              <div class="vs-icon" style="background:rgba(59,130,246,.1);color:#3B82F6">🔍</div>
+              <div>
+                <div class="vs-title">Search Demo</div>
+                <div class="vs-desc">Watch natural language query return video clips</div>
+              </div>
+              <div class="vs-badge" style="background:rgba(59,130,246,.1);color:#3B82F6">Demo 03</div>
+            </div>
+            <div class="vs-body" id="vb3" onclick="document.getElementById('vf3').click()">
+              <video id="vv3" loop style="display:none"></video>
+              <div class="vs-upload" id="vu3">
+                <div class="vs-upload-icon">📁</div><span>Click or drag a video file here</span>
+              </div>
+              <div class="vs-controls" id="vc3" style="display:none">
+                <button class="vs-btn" onclick="event.stopPropagation();togglePlay('vv3','vp3')">▶</button>
+                <button class="vs-btn" onclick="event.stopPropagation();toggleMute('vv3','vm3')">🔊</button>
+                <span id="vp3" style="font-size:10px;color:rgba(255,255,255,.5);margin-left:4px">Paused</span>
+                <span style="margin-left:auto;font-size:10px;color:rgba(255,255,255,.4)">Live Demo</span>
+              </div>
+            </div>
+            <input type="file" id="vf3" accept="video/*" style="display:none"
+              onchange="loadVideo('vv3','vu3','vc3',this)">
+          </div>
+        </div>
+        <div class="flex fcol gap3 flex1">
+          <div class="card" style="background:rgba(59,130,246,.05);border:1px solid rgba(59,130,246,.15)">
+            <div style="font-size:18px;margin-bottom:6px">🔤</div>
+            <div style="font-size:12px;font-weight:700;color:#3B82F6;margin-bottom:4px">Query Embedding</div>
+            <p style="font-size:11px;color:#64748b;line-height:1.5">Your text query is embedded via CLIP into the same
+              512-dim vector space as the video frames.</p>
+          </div>
+          <div class="card" style="background:rgba(139,92,246,.05);border:1px solid rgba(139,92,246,.15)">
+            <div style="font-size:18px;margin-bottom:6px">🔍</div>
+            <div style="font-size:12px;font-weight:700;color:#8B5CF6;margin-bottom:4px">Cosine Similarity</div>
+            <p style="font-size:11px;color:#64748b;line-height:1.5">Similarity search runs across all stored embeddings
+              in DDN Infinia — no round-trip to a separate vector DB.</p>
+          </div>
+          <div class="card" style="background:rgba(16,185,129,.05);border:1px solid rgba(16,185,129,.15)">
+            <div style="font-size:18px;margin-bottom:6px">🏷️</div>
+            <div style="font-size:12px;font-weight:700;color:#10B981;margin-bottom:4px">Tag Matching</div>
+            <p style="font-size:11px;color:#64748b;line-height:1.5">LLM-enriched hashtags are also matched — boosting
+              recall for domain-specific terminology.</p>
+          </div>
+          <div class="card" style="background:rgba(245,158,11,.05);border:1px solid rgba(245,158,11,.15)">
+            <div style="font-size:18px;margin-bottom:6px">⚡</div>
+            <div style="font-size:12px;font-weight:700;color:#F59E0B;margin-bottom:4px">Sub-2s Results</div>
+            <p style="font-size:11px;color:#64748b;line-height:1.5">Ranked results surface with presigned video URLs, AI
+              summaries, and matched tags — ready to play.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ SLIDE 8 — CONTINUOUS INGESTION ═══ -->
+    <div class="slide flex fcol p10" id="s8" style="background:#fff">
+      <div class="slide-meta">
+        <div class="slide-num">08</div>
+        <div class="slide-label">Demo 04 · Continuous Ingestion</div>
+      </div>
+      <h2>Continuous Ingestion — <span>Always On</span></h2>
+      <p class="sub">Bucket monitor watches DDN Infinia for new uploads — AI enrichment runs automatically, 24/7</p>
+      <div class="flex gap6 flex1">
+        <div style="width:52%;flex-shrink:0">
+          <div class="video-slot" style="background:#F0FDF8;border:1.5px solid rgba(16,185,129,.2);height:100%">
+            <div class="vs-header">
+              <div class="vs-icon" style="background:rgba(16,185,129,.1);color:#10B981">♻️</div>
+              <div>
+                <div class="vs-title">Continuous Ingestion Demo</div>
+                <div class="vs-desc">Watch the pipeline auto-process new uploads</div>
+              </div>
+              <div class="vs-badge" style="background:rgba(16,185,129,.1);color:#10B981">Demo 04</div>
+            </div>
+            <div class="vs-body" id="vb4" onclick="document.getElementById('vf4').click()">
+              <video id="vv4" loop style="display:none"></video>
+              <div class="vs-upload" id="vu4">
+                <div class="vs-upload-icon">📁</div><span>Click or drag a video file here</span>
+              </div>
+              <div class="vs-controls" id="vc4" style="display:none">
+                <button class="vs-btn" onclick="event.stopPropagation();togglePlay('vv4','vp4')">▶</button>
+                <button class="vs-btn" onclick="event.stopPropagation();toggleMute('vv4','vm4')">🔊</button>
+                <span id="vp4" style="font-size:10px;color:rgba(255,255,255,.5);margin-left:4px">Paused</span>
+                <span style="margin-left:auto;font-size:10px;color:rgba(255,255,255,.4)">Live Demo</span>
+              </div>
+            </div>
+            <input type="file" id="vf4" accept="video/*" style="display:none"
+              onchange="loadVideo('vv4','vu4','vc4',this)">
+          </div>
+        </div>
+        <div class="flex fcol gap4 flex1">
+          <div class="card" style="background:#ECFDF5;border:1.5px solid rgba(16,185,129,.2)">
+            <div style="font-size:13px;font-weight:700;color:#10B981;margin-bottom:10px">How the Pipeline Runs</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="font-size:12px;color:#475569">👁️&nbsp; Bucket Monitor polls DDN Infinia every 30s for new
+                objects</div>
+              <div style="font-size:12px;color:#475569">🤖&nbsp; New video triggers automatic GPU-accelerated AI
+                processing</div>
+              <div style="font-size:12px;color:#475569">✨&nbsp; LLM enrichment runs on completion — tags + summary
+                written to manifest</div>
+              <div style="font-size:12px;color:#475569">🔎&nbsp; Video is immediately searchable — no manual
+                intervention required</div>
+            </div>
+          </div>
+          <div class="card" style="background:#F4FBEA;border:1px solid rgba(118,185,0,.15)">
+            <div style="font-size:13px;font-weight:700;color:#76B900;margin-bottom:6px">Scalability</div>
+            <p style="font-size:12px;color:#475569;line-height:1.6">Scales linearly with DDN Infinia — adding 100TB of
+              new video requires zero rebalancing, zero reindexing, zero downtime. Every new asset is live the moment
+              processing completes.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ SLIDE 9 — BUSINESS CASE ═══ -->
+    <div class="slide flex fcol p10" id="s9" style="background:#fff">
+      <div class="slide-meta">
+        <div class="slide-num">09</div>
+        <div class="slide-label">Business Case</div>
+      </div>
+      <h2>Strategic <span>Value</span> Framework</h2>
+      <p class="sub">GTC 2026 Showcase · NVIDIA VSS × DDN Infinia</p>
+      <div class="grid3 flex1">
+        <div class="card flex fcol" style="background:#ECFDF5;border:1.5px solid rgba(16,185,129,.2)">
+          <div style="font-size:13px;font-weight:700;color:#10B981;margin-bottom:6px">Business Outcome</div>
+          <span class="pill"
+            style="background:#fff;color:#10B981;border:1px solid rgba(16,185,129,.25);margin-bottom:12px;width:fit-content">Dark
+            Data → Intelligence</span>
+          <div class="flex fcol gap3 flex1">
+            <div class="bullet"><span>1 analyst replaces 3-person tagging team</span></div>
+            <div class="bullet"><span>PB-scale NLP results in &lt;2 seconds</span></div>
+            <div class="bullet"><span>Edge-case curation: weeks → minutes</span></div>
+            <div class="bullet"><span>AI iteration: months → days</span></div>
+          </div>
+          <div
+            style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(16,185,129,.2);font-size:11px;font-style:italic;color:#10B981">
+            "Our data estate became an active intelligence asset."</div>
+        </div>
+        <div class="card flex fcol" style="background:#FFFBEB;border:1.5px solid rgba(245,158,11,.2)">
+          <div style="font-size:13px;font-weight:700;color:#F59E0B;margin-bottom:6px">Financial Outcome</div>
+          <span class="pill"
+            style="background:#fff;color:#F59E0B;border:1px solid rgba(245,158,11,.25);margin-bottom:12px;width:fit-content">$2M–$5M
+            Eliminated</span>
+          <div class="flex fcol gap3 flex1">
+            <div class="bullet"><span>$500K–$2M vector DB deferred to $0</span></div>
+            <div class="bullet"><span>$800K–$3M/yr egress costs removed</span></div>
+            <div class="bullet"><span>Annotation budget eliminated</span></div>
+            <div class="bullet"><span>CLIP reuse → zero marginal cost per query</span></div>
+          </div>
+          <div
+            style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(245,158,11,.2);font-size:11px;font-style:italic;color:#F59E0B">
+            "One infra decision eliminated three budget lines."</div>
+        </div>
+        <div class="card flex fcol" style="background:#FFF0F1;border:1.5px solid rgba(237,39,56,.2)">
+          <div style="font-size:13px;font-weight:700;color:#ED2738;margin-bottom:6px">AI Infra Impact</div>
+          <span class="pill"
+            style="background:#fff;color:#ED2738;border:1px solid rgba(237,39,56,.25);margin-bottom:12px;width:fit-content">GPU:
+            40% → &gt;85%</span>
+          <div class="flex fcol gap3 flex1">
+            <div class="bullet"><span>Co-located inference — zero I/O starvation</span></div>
+            <div class="bullet"><span>Sub-2s TTFT (time-to-first-token)</span></div>
+            <div class="bullet"><span>NVIDIA VSS blueprint — zero integration debt</span></div>
+            <div class="bullet"><span>Linear scale — no rebalancing needed</span></div>
+          </div>
+          <div
+            style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(237,39,56,.2);font-size:11px;font-style:italic;color:#ED2738">
+            "GPUs now run at the speed we paid for."</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ SLIDE 10 — CLOSING ═══ -->
+    <div class="slide" id="s10" style="background:#fff">
+      <div class="dark-panel">
+        <div>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:24px">
+            <div style="width:8px;height:8px;border-radius:50%;background:#ED2738"></div>
+            <div style="width:8px;height:8px;border-radius:50%;background:#76B900"></div>
+            <span style="color:rgba(255,255,255,.3);font-size:11px;margin-left:8px">GTC 2026</span>
+          </div>
+          <p style="color:rgba(255,255,255,.7);font-size:24px;font-weight:300;line-height:1.6;margin-bottom:14px">
+            Enterprise-scale video is growing faster than humans can manage it.</p>
+          <p style="color:#F59E0B;font-size:28px;font-weight:700;line-height:1.3">Your AI infrastructure should be built
+            for what's next.</p>
+        </div>
+        <div>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px">
+            <div style="font-size:12px;color:rgba(255,255,255,.4)">● Scan QR for live demo access</div>
+            <div style="font-size:12px;color:rgba(255,255,255,.4)">● Proof of concept discussions</div>
+            <div style="font-size:12px;color:rgba(255,255,255,.4)">● Build.DDN.com documentation</div>
+          </div>
+          <div style="font-size:14px;font-style:italic;color:rgba(245,158,11,.7)">"Let me show you how."</div>
+        </div>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:56px">
+        <div style="margin-bottom:28px">
+          <div style="font-size:44px;font-weight:900;color:#0f172a">Build.DDN:VSS</div>
+          <div style="font-size:15px;color:#94a3b8;margin-top:4px">Multimodal Semantic Video Search</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:28px">
+          <span style="font-size:32px;font-weight:900;color:#ED2738">DDN</span>
+          <span style="font-size:24px;color:#cbd5e1">×</span>
+          <span style="font-size:32px;font-weight:900;color:#76B900">NVIDIA</span>
+        </div>
+        <div style="height:1px;background:#f1f5f9;margin-bottom:28px"></div>
+        <div class="grid3" style="margin-bottom:28px">
+          <div class="stat" style="background:#FFF0F1;border:1.5px solid rgba(237,39,56,.15)">
+            <div class="val" style="color:#ED2738">&lt;2s</div>
+            <div class="lbl">results at any scale</div>
+          </div>
+          <div class="stat" style="background:#F4FBEA;border:1.5px solid rgba(118,185,0,.15)">
+            <div class="val" style="color:#76B900">&gt;85%</div>
+            <div class="lbl">GPU utilization</div>
+          </div>
+          <div class="stat" style="background:#EFF6FF;border:1.5px solid rgba(59,130,246,.15)">
+            <div class="val" style="color:#3B82F6">$0</div>
+            <div class="lbl">vector DB cost</div>
+          </div>
+        </div>
+        <p style="font-size:12px;color:#cbd5e1">Powered by NVIDIA GPU · Stored on DDN Infinia · GTC 2026</p>
+      </div>
+    </div>
+
+  </div><!-- /stage -->
+
+  <!-- prev/next arrows -->
+  <button id="prev" onclick="navigate(-1)">‹</button>
+  <button id="next" onclick="navigate(1)">›</button>
+
+  <!-- Keyboard hint -->
+  <div id="hint">← → Arrow keys to navigate &nbsp;·&nbsp; F = Fullscreen &nbsp;·&nbsp; ESC = Exit</div>
+
+  <script>
+    // ── Auto-scaling zoom (responsive to any screen size) ──
+    // Design target: 1200px wide. Scales up on theater 4K, stays readable on laptops.
+    // To force a fixed zoom, replace the line below with: document.documentElement.style.zoom = '1.8';
+    function applyZoom() {
+      // Use the smaller of width-based and height-based zoom so nothing clips
+      const zoomW = window.innerWidth / 1200;
+      const zoomH = window.innerHeight / 720; // 720px is design height baseline
+      const zoom = Math.min(2.0, Math.max(0.7, Math.min(zoomW, zoomH)));
+      document.documentElement.style.zoom = zoom;
+      document.body.style.width = (100 / zoom) + 'vw';
+      document.body.style.height = (100 / zoom) + 'vh';
+    }
+    applyZoom();
+    window.addEventListener('resize', applyZoom);
+
+    const slides = document.querySelectorAll('.slide');
+    const titles = ['VSS', 'Cover', 'The Problem', 'The Solution', 'Architecture', 'Demo: Ingestion', 'Human in the Loop', 'Semantic Search', 'Continuous Ingestion', 'Business Case', 'Closing'];
+    let cur = 0;
+
+    // ── Build dots ──────────────────────────────────────────
+    const dotsEl = document.getElementById('dots');
+    titles.forEach((t, i) => {
+      const b = document.createElement('button');
+      b.title = t;
+      b.onclick = () => goTo(i);
+      dotsEl.appendChild(b);
+    });
+
+
+    function goTo(n) {
+      const prev = cur;
+      if (typeof onSlideLeave === 'function') onSlideLeave(prev);
+      slides[prev].classList.remove('active');
+      cur = Math.max(0, Math.min(n, slides.length - 1));
+      slides[cur].classList.add('active');
+      dotsEl.querySelectorAll('button').forEach((b, i) => b.classList.toggle('active', i === cur));
+      document.getElementById('slide-title-bar').textContent = titles[cur];
+      document.getElementById('counter').textContent = (cur + 1) + ' / ' + slides.length;
+      document.getElementById('progress-bar').style.width = ((cur + 1) / slides.length * 100) + '%';
+      document.getElementById('prev').style.opacity = cur === 0 ? '0.3' : '1';
+      document.getElementById('next').style.opacity = cur === slides.length - 1 ? '0.3' : '1';
+      if (typeof onSlideEnter === 'function') onSlideEnter(cur);
+    }
+
+    // ── navigate: intercepts forward on demo slides to do 2-phase reveal ──
+    function navigate(d) {
+      if (d > 0 && DEMO_VIDEO[cur] !== undefined) {
+        const vsParent = getVideoSlotParent(slides[cur]);
+        const videoRevealed = vsParent && parseFloat(vsParent.style.opacity || 0) > 0.5;
+        if (!videoRevealed) {
+          revealVideoSlot(cur); // Phase 2: show + play video
+          return;               // don't change slide yet
+        }
+        // Video is revealed — if it's actively playing, block navigation
+        const vid = document.getElementById(DEMO_VIDEO[cur]);
+        if (vid && vid.src && vid.src !== location.href && !vid.paused && !vid.ended) {
+          return; // let video finish
+        }
+      }
+      goTo(cur + d);
+    }
+
+    // Helper: get the 52%-wide wrapper that contains the video-slot
+    function getVideoSlotParent(slideEl) {
+      const vs = slideEl.querySelector('.video-slot');
+      if (!vs) return null;
+      const p = vs.parentElement;
+      return (p && p.style && p.style.width) ? p : vs;
+    }
+
+    // goTo(0) is called AFTER all consts below are set up
+
+    // ── Keyboard ─────────────────────────────────────────────
+    document.addEventListener('keydown', e => {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') { e.preventDefault(); navigate(1); }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); navigate(-1); }
+      if (e.key === 'f' || e.key === 'F') { toggleFS(); }
+      if (e.key === 'Escape') { document.exitFullscreen && document.exitFullscreen(); }
+    });
+
+    // ── Touch swipe ──────────────────────────────────────────
+    let startX = 0;
+    document.getElementById('stage').addEventListener('touchstart', e => startX = e.touches[0].clientX, { passive: true });
+    document.getElementById('stage').addEventListener('touchend', e => {
+      const dx = e.changedTouches[0].clientX - startX;
+      if (Math.abs(dx) > 50) navigate(dx < 0 ? 1 : -1);
+    });
+
+    // ── Fullscreen ───────────────────────────────────────────
+    function toggleFS() {
+      if (!document.fullscreenElement) { document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); }
+      else { document.exitFullscreen && document.exitFullscreen(); }
+    }
+    document.getElementById('btn-fs').onclick = toggleFS;
+    setTimeout(() => { const h = document.getElementById('hint'); if (h) { h.style.transition = 'opacity 1s'; h.style.opacity = '0'; setTimeout(() => h.remove(), 1000); } }, 4000);
+
+    // ── Reveal / animation constants ─────────────────────────
+    const REVEAL_SLIDES = [4, 5, 6, 7, 8]; // 0-based slide indices with animation
+    // All 4 demo slides: video slot waits for user click. vv3/vv4 = drop-zone until files added.
+    const DEMO_VIDEO = { 5: 'vv1', 6: 'vv2', 7: 'vv3', 8: 'vv4' };
+
+    // Returns only the CARD items for a slide (NOT the video slot)
+    function getCardItems(slideEl) {
+      const items = [];
+      const pipe = slideEl.querySelector('.pipeline'); if (pipe) items.push(pipe);
+      const sg = slideEl.querySelector('.grid4'); if (sg) items.push(sg);
+      const rc = slideEl.querySelector('.flex.fcol.gap3') || slideEl.querySelector('.flex.fcol.gap4');
+      if (rc) rc.querySelectorAll(':scope > .card').forEach(c => items.push(c));
+      return items;
+    }
+
+    // Returns all items including video slot (for hide/reset)
+    function getAllItems(slideEl) {
+      const items = getCardItems(slideEl);
+      const vs = slideEl.querySelector('.video-slot');
+      if (vs) { const p = vs.parentElement; items.push((p && p.style && p.style.width) ? p : vs); }
+      return items;
+    }
+
+    function hideAllItems(idx) {
+      if (!REVEAL_SLIDES.includes(idx)) return;
+      getAllItems(slides[idx]).forEach(el => {
+        el.style.transition = 'none';
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(24px)';
+      });
+    }
+
+    // Phase 1: auto-animate cards staggered, leave video slot hidden
+    function animateCardsIn(idx) {
+      if (!REVEAL_SLIDES.includes(idx)) return;
+      getCardItems(slides[idx]).forEach((el, i) => {
+        el.style.opacity = '0'; el.style.transform = 'translateY(24px)'; el.style.transition = 'none';
+        setTimeout(() => {
+          el.style.transition = 'opacity 0.55s ease, transform 0.55s ease';
+          el.style.opacity = '1'; el.style.transform = 'translateY(0)';
+        }, 120 + i * 700);
+      });
+    }
+
+    // Phase 2: reveal video slot + play (triggered by user click/arrow)
+    function revealVideoSlot(idx) {
+      const vsParent = getVideoSlotParent(slides[idx]);
+      if (vsParent) {
+        vsParent.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+        vsParent.style.opacity = '1';
+        vsParent.style.transform = 'translateY(0)';
+      }
+      const vidId = DEMO_VIDEO[idx];
+      if (!vidId) return;
+      const vid = document.getElementById(vidId);
+      if (vid && vid.src && vid.src !== location.href) {
+        vid.currentTime = 0;
+        setTimeout(() => { vid.play().catch(() => { const l = document.getElementById(vidId.replace('vv','vp')); if (l) l.textContent = 'Press ▶'; }); }, 400);
+        const lbl = document.getElementById(vidId.replace('vv', 'vp')); if (lbl) lbl.textContent = 'Playing';
+      }
+    }
+
+    function onSlideEnter(idx) {
+      animateCardsIn(idx); // Only cards auto-animate. Video waits for click.
+    }
+
+    function onSlideLeave(idx) {
+      hideAllItems(idx); // hides everything including video slot
+      const vidId = DEMO_VIDEO[idx];
+      if (!vidId) return;
+      const vid = document.getElementById(vidId);
+      if (vid) { vid.pause(); vid.currentTime = 0; }
+    }
+
+    // Init: hide all demo/reveal slide items, then go to slide 1
+    REVEAL_SLIDES.forEach(i => hideAllItems(i));
+    goTo(0);
+
+    // ── VIDEO FILE CONFIGURATION ─────────────────────────────
+    // Place mp4 files in  video/  folder next to GTCDeck.html.
+    // Leave empty '' for slots you'll add later — drag-drop still works.
+    const VIDEO_FILES = {
+      vv1: 'video/Ingest.mp4',     // Slide 5 — Ingestion demo
+      vv2: 'video/HITL.mp4',       // Slide 6 — Human in the Loop
+      vv3: 'video/Search.mp4',     // Slide 7 — Semantic Search
+      vv4: 'video/Continous.mp4',  // Slide 8 — Continuous Ingestion
+    };
+
+    // setupVideo: loads src and hides upload prompt — does NOT play
+    function setupVideo(vidId, uploadId, controlsId, src) {
+      const vid = document.getElementById(vidId);
+      if (!vid) return;
+      vid.src = src;
+      vid.style.display = 'block';
+      vid.loop = false;
+      const up = document.getElementById(uploadId); if (up) up.style.display = 'none';
+      const ctrl = document.getElementById(controlsId); if (ctrl) ctrl.style.display = 'flex';
+      // Video stops at end — presenter advances manually with arrow key
+      vid.onended = null;
+      vid.onerror = () => {
+        vid.style.display = 'none'; if (up) up.style.display = 'flex'; if (ctrl) ctrl.style.display = 'none';
+      };
+    }
+
+    // activateVideo: used by drag-drop and file picker — loads AND plays immediately
+    function activateVideo(vidId, uploadId, controlsId, src) {
+      setupVideo(vidId, uploadId, controlsId, src);
+      const vid = document.getElementById(vidId);
+      if (vid) { vid.play().catch(() => {}); const l = document.getElementById(vidId.replace('vv','vp')); if (l) l.textContent = 'Playing'; }
+    }
+
+    // Load configured video files (but do NOT play — video waits for click)
+    Object.entries(VIDEO_FILES).forEach(([id, path]) => {
+      if (!path) return;
+      const n = id.replace('vv', '');
+      setupVideo(id, 'vu' + n, 'vc' + n, path);
+    });
+
+    // File-picker fallback
+    function loadVideo(vidId, uploadId, controlsId, input) {
+      const f = input.files[0]; if (!f) return;
+      activateVideo(vidId, uploadId, controlsId, URL.createObjectURL(f));
+    }
+
+    // Drag-and-drop
+    ['vb1','vb2','vb3','vb4'].forEach((id, i) => {
+      const el = document.getElementById(id);
+      el.addEventListener('dragover', e => { e.preventDefault(); el.style.outline = '2px dashed #76B900'; });
+      el.addEventListener('dragleave', () => { el.style.outline = ''; });
+      el.addEventListener('drop', e => {
+        e.preventDefault(); el.style.outline = '';
+        const f = e.dataTransfer.files[0];
+        if (f && f.type.startsWith('video/')) activateVideo('vv'+(i+1), 'vu'+(i+1), 'vc'+(i+1), URL.createObjectURL(f));
+      });
+    });
+
+    function togglePlay(vidId, labelId) {
+      const v = document.getElementById(vidId), l = document.getElementById(labelId);
+      if (v.paused) { v.play(); if (l) l.textContent = 'Playing'; } else { v.pause(); if (l) l.textContent = 'Paused'; }
+    }
+    function toggleMute(vidId) { const v = document.getElementById(vidId); v.muted = !v.muted; }
+  </script>
+</body>
+</html>

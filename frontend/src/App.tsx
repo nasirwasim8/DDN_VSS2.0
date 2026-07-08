@@ -10,12 +10,14 @@ import BrowsePage from './pages/Browse'
 import VideoSearchPage from './pages/VideoSearch'
 import ContinuousIngestionPage from './pages/ContinuousIngestion'
 import AboutPage from './pages/About'
+import GtcDeck from './pages/GtcDeck'
 
 
 // Top-level navigation
 const mainTabs = [
   { id: 'about', label: 'About' },
-  { id: 'demo', label: 'Demo' },
+  { id: 'demo',  label: 'Demo' },
+  { id: 'gtc',   label: 'GTC Deck' },
 ]
 
 // Demo sidebar navigation
@@ -30,7 +32,7 @@ const demoTabs = [
 
 
 function App() {
-  const [mainView, setMainView] = useState<'about' | 'demo'>('about')
+  const [mainView, setMainView] = useState<'about' | 'demo' | 'gtc'>('about')
   const [demoTab, setDemoTab] = useState('config')
 
   const handleStartDemo = () => {
@@ -39,11 +41,9 @@ function App() {
   }
 
   const handleMainTabChange = (tabId: string) => {
-    if (tabId === 'about') {
-      setMainView('about')
-    } else {
-      setMainView('demo')
-    }
+    if (tabId === 'about') setMainView('about')
+    else if (tabId === 'gtc') setMainView('gtc')
+    else setMainView('demo')
   }
 
   const renderDemoPage = () => {
@@ -76,7 +76,19 @@ function App() {
 
         {/* Main content */}
         <main>
-          {mainView === 'about' ? (
+          {mainView === 'gtc' ? (
+            <AnimatePresence mode="wait">
+              <motion.div
+                key="gtc"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+              >
+                <GtcDeck />
+              </motion.div>
+            </AnimatePresence>
+          ) : mainView === 'about' ? (
             <AnimatePresence mode="wait">
               <motion.div
                 key="about"

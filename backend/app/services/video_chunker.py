@@ -6,11 +6,15 @@ for parallel processing of large video files.
 """
 
 import logging
+import threading
 import cv2
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
+
+# Hard timeout (seconds) for any single cv2.VideoCapture operation
+CV2_TIMEOUT = 30
 
 
 @dataclass
@@ -33,49 +37,68 @@ class VideoChunker:
             chunk_duration: Duration of each chunk in seconds (default: 10s)
         """
         self.chunk_duration = chunk_duration
-    
+
+    def _get_video_info_inner(self, video_path: str) -> Optional[Dict[str, Any]]:
+        """Inner helper — runs in a thread so we can enforce a timeout."""
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            logger.error(f"Failed to open video: {video_path}")
+            return None
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        duration = frame_count / fps if fps > 0 else 0
+        cap.release()
+        return {'fps': fps, 'frame_count': frame_count,
+                'width': width, 'height': height, 'duration': duration}
+
     def get_video_info(self, video_path: str) -> Optional[Dict[str, Any]]:
         """
-        Extract video metadata using OpenCV.
-        
+        Extract video metadata using OpenCV with a hard timeout.
+        cv2.VideoCapture can hang indefinitely on corrupt/incompatible files;
+        the timeout ensures the background task never gets permanently stuck.
+
         Args:
             video_path: Path to video file
-            
+
         Returns:
-            Dict with video properties or None on error
+            Dict with video properties or None on error / timeout
         """
-        try:
-            cap = cv2.VideoCapture(video_path)
-            
-            if not cap.isOpened():
-                logger.error(f"Failed to open video: {video_path}")
-                return None
-            
-            # Get video properties
-            fps = cap.get(cv2.CAP_PROP_FPS)
-            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            
-            # Calculate duration
-            duration = frame_count / fps if fps > 0 else 0
-            
-            cap.release()
-            
-            info = {
-                'fps': fps,
-                'frame_count': frame_count,
-                'width': width,
-                'height': height,
-                'duration': duration
-            }
-            
-            logger.info(f"📹 Video info: {width}x{height} @ {fps:.2f}fps, duration: {duration:.2f}s")
-            return info
-            
-        except Exception as e:
-            logger.error(f"Error extracting video info: {e}")
+        result: Dict = {}
+        exc: Dict = {}
+
+        def _run():
+            try:
+                r = self._get_video_info_inner(video_path)
+                if r:
+                    result.update(r)
+            except Exception as e:
+                exc['error'] = e
+
+        t = threading.Thread(target=_run, daemon=True)
+        t.start()
+        t.join(timeout=CV2_TIMEOUT)
+
+        if t.is_alive():
+            logger.error(
+                f"⏱️ cv2.VideoCapture timed out after {CV2_TIMEOUT}s on {video_path} "
+                f"— video may be corrupt or incompatible"
+            )
             return None
+
+        if exc.get('error'):
+            logger.error(f"Error extracting video info: {exc['error']}")
+            return None
+
+        if not result:
+            return None
+
+        logger.info(
+            f"📹 Video info: {result['width']}x{result['height']} "
+            f"@ {result['fps']:.2f}fps, duration: {result['duration']:.2f}s"
+        )
+        return result
     
     def calculate_chunks(self, duration: float) -> List[VideoChunk]:
         """

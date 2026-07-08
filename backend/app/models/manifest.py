@@ -91,6 +91,16 @@ class AssetManifest(BaseModel):
     version: int = Field(default=1, description="Manifest version for reprocessing")
     ingestion_time_seconds: float = Field(default=0.0, description="Total end-to-end ingestion processing time in seconds")
 
+    # LLM Enrichment (Ollama/OpenAI Vision post-processing)
+    enriched_summary: str = Field(default="", description="LLM-generated clean semantic summary")
+    enriched_tags: List[str] = Field(default_factory=list, description="Search-optimized tags from LLM")
+    scene_type: str = Field(default="", description="Scene classification: urban_outdoor, indoor, etc.")
+    key_events: List[str] = Field(default_factory=list, description="Meaningful events/actions detected")
+    llm_enriched: bool = Field(default=False, description="True when LLM enrichment succeeded")
+    llm_provider_used: str = Field(default="", description="Which LLM provider was used: openai, ollama, or empty")
+
+
+
     
     def add_artifact(self, artifact_type: str, s3_key: str):
         """Add an artifact to tracking."""

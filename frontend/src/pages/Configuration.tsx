@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { CheckCircle, XCircle, Loader2, Server, FolderOpen, Info } from 'lucide-react'
+import { CheckCircle, XCircle, Loader2, Server, FolderOpen, Info, Sparkles, Database } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api, StorageConfig } from '../services/api'
 
@@ -18,6 +18,18 @@ export default function ConfigurationPage() {
     videos_path: '',
     embeddings_path: '',
   })
+
+  // ── LLM Configuration state ──────────────────────────────────────────────
+  const [llmConfig, setLlmConfig] = useState({
+    provider: 'openai',          // 'openai' | 'ollama' | 'auto'
+    openai_api_key: '',          // blank = use existing server key
+    openai_key_masked: '',       // shown when key is already set
+    openai_key_set: false,
+    ollama_url: 'http://localhost:11434',
+    ollama_available: false,
+    model: 'llava:7b',
+  })
+  const [llmConfigLoading, setLlmConfigLoading] = useState(true)
 
   const [ddnStatus, setDdnStatus] = useState<{ connected: boolean; latency?: number } | null>(null)
   const [configLoaded, setConfigLoaded] = useState(false)
@@ -55,6 +67,31 @@ export default function ConfigurationPage() {
       }
     }
     loadSavedConfig()
+
+    // Load LLM config
+    const loadLlmConfig = async () => {
+      try {
+        setLlmConfigLoading(true)
+        const res = await fetch('/api/config/llm')
+        if (res.ok) {
+          const data = await res.json()
+          setLlmConfig(prev => ({
+            ...prev,
+            provider: data.provider || 'openai',
+            openai_key_set: data.openai_key_set || false,
+            openai_key_masked: data.openai_key_masked || '',
+            ollama_url: data.ollama_url || 'http://localhost:11434',
+            ollama_available: data.ollama_available || false,
+            model: data.model || 'llava:7b',
+          }))
+        }
+      } catch (e) {
+        console.warn('Could not load LLM config:', e)
+      } finally {
+        setLlmConfigLoading(false)
+      }
+    }
+    loadLlmConfig()
   }, [])
 
   const saveDdnMutation = useMutation({
@@ -95,6 +132,28 @@ export default function ConfigurationPage() {
     onError: () => {
       toast.error('Failed to save configuration before testing')
     },
+  })
+
+  const saveLlmMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/config/llm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: llmConfig.provider,
+          openai_api_key: llmConfig.openai_api_key,
+          ollama_url: llmConfig.ollama_url,
+          model: llmConfig.model,
+        }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      return res.json()
+    },
+    onSuccess: (data: any) => {
+      toast.success(`LLM provider set to ${data.provider}`)
+      setLlmConfig(prev => ({ ...prev, openai_api_key: '' }))
+    },
+    onError: () => toast.error('Failed to save LLM configuration'),
   })
 
   return (
@@ -243,6 +302,118 @@ export default function ConfigurationPage() {
             )}
           </div>
         )}
+      </div>
+
+      {/* ── LLM AI Enrichment Configuration ───────────────────────────────────── */}
+      <div className="card-elevated p-6" style={{ borderLeft: '3px solid #F97316' }}>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#FFF7ED' }}>
+              <Sparkles className="w-5 h-5" style={{ color: '#F97316' }} />
+            </div>
+            <div>
+              <h3 className="font-semibold text-neutral-900">AI Enrichment (LLM)</h3>
+              <p className="text-xs text-neutral-500">Configure OpenAI or local Ollama for metadata enrichment</p>
+            </div>
+          </div>
+          {/* Live status chips */}
+          <div className="flex items-center gap-2">
+            {llmConfig.openai_key_set && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                <CheckCircle className="w-3 h-3" /> OpenAI Ready
+              </span>
+            )}
+            {llmConfig.ollama_available ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                <Database className="w-3 h-3" /> Ollama Online
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-neutral-100 text-neutral-500">
+                <Database className="w-3 h-3" /> Ollama Offline
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Info Alert */}
+        <div className="mb-5 flex items-start gap-3 p-4 rounded-lg" style={{ background: '#FFF7ED', border: '1px solid #FED7AA' }}>
+          <Info className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: '#EA580C' }} />
+          <div className="text-sm" style={{ color: '#9A3412' }}>
+            <p className="font-medium mb-1">Auto-Fallback Mode</p>
+            <p>When set to <b>OpenAI</b>: uses GPT-4o-mini for best accuracy. At conferences without reliable internet, it automatically falls back to <b>Ollama llava:7b</b> on the local GPU. Set to <b>Ollama Only</b> to always use the local model.</p>
+          </div>
+        </div>
+
+        {/* Provider Dropdown */}
+        <div className="mb-4">
+          <label className="block text-xs font-medium text-neutral-500 uppercase tracking-wide mb-2">LLM Provider</label>
+          <select
+            value={llmConfig.provider}
+            onChange={(e) => setLlmConfig({ ...llmConfig, provider: e.target.value })}
+            className="input-field"
+          >
+            <option value="openai">OpenAI GPT-4o-mini (+ Ollama fallback)</option>
+            <option value="ollama">Ollama Only (fully offline, local GPU)</option>
+            <option value="auto">Auto-Fallback (OpenAI → Ollama)</option>
+          </select>
+        </div>
+
+        {/* OpenAI API Key */}
+        {(llmConfig.provider === 'openai' || llmConfig.provider === 'auto') && (
+          <div className="mb-4">
+            <label className="block text-xs font-medium text-neutral-500 uppercase tracking-wide mb-2">
+              OpenAI API Key
+              {llmConfig.openai_key_set && (
+                <span className="ml-2 text-green-600 normal-case font-normal">
+                  (current: {llmConfig.openai_key_masked})
+                </span>
+              )}
+            </label>
+            <input
+              type="password"
+              value={llmConfig.openai_api_key}
+              onChange={(e) => setLlmConfig({ ...llmConfig, openai_api_key: e.target.value })}
+              placeholder={llmConfig.openai_key_set ? 'Leave blank to keep existing key' : 'sk-proj-...'}
+              className="input-field"
+            />
+          </div>
+        )}
+
+        {/* Ollama URL */}
+        <div className="grid md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="block text-xs font-medium text-neutral-500 uppercase tracking-wide mb-2">Ollama URL</label>
+            <input
+              type="text"
+              value={llmConfig.ollama_url}
+              onChange={(e) => setLlmConfig({ ...llmConfig, ollama_url: e.target.value })}
+              placeholder="http://localhost:11434"
+              className="input-field"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-neutral-500 uppercase tracking-wide mb-2">Vision Model</label>
+            <input
+              type="text"
+              value={llmConfig.model}
+              onChange={(e) => setLlmConfig({ ...llmConfig, model: e.target.value })}
+              placeholder="llava:7b"
+              className="input-field"
+            />
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-3 mt-6 pt-6 border-t border-neutral-100">
+          <button
+            onClick={() => saveLlmMutation.mutate()}
+            disabled={saveLlmMutation.isPending || llmConfigLoading}
+            className="btn-primary"
+            style={{ backgroundColor: '#F97316', borderColor: '#F97316' }}
+          >
+            {saveLlmMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save LLM Configuration'}
+          </button>
+        </div>
       </div>
 
       {/* Local Cache Configuration */}
