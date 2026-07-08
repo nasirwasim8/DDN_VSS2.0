@@ -1334,7 +1334,7 @@ def _reindex_background():
                             vector_index.add(emb, {
                                 "asset_id":   asset_id,
                                 "media_type": manifest.media_type or "video",
-                                "s3_key":     manifest.s3_key or "",
+                                "s3_key":     manifest.raw_object_key or "",  # fixed: was .s3_key
                                 "chunk_id":   kf_data.get('chunk_id', 0),
                                 "frame_id":   kf_data.get('frame_id', 0),
                                 "timestamp":  kf_data.get('timestamp', 0),
