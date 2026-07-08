@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   Search as SearchIcon, Image, Video, FileText, Loader2, Download,
@@ -333,6 +333,7 @@ export default function SearchPage() {
           {searchResults.map((result, idx) => {
             const scorePercent = (result.relevance_score * 100).toFixed(0)
             const isFaiss = result.metadata?.search_mode === 'vector'
+            const meta = result.metadata as Record<string, string | undefined>
             return (
               <div key={`${result.object_key}-${idx}`} className="media-card">
                 {/* Preview */}
@@ -388,16 +389,16 @@ export default function SearchPage() {
                   </h3>
 
                   {/* Caption */}
-                  {result.metadata?.caption && (
+                  {meta.caption && (
                     <p className="text-xs text-neutral-600 dark:text-neutral-400 mb-2 line-clamp-2">
-                      {String(result.metadata.caption)}
+                      {meta.caption}
                     </p>
                   )}
 
                   {/* Tags */}
-                  {result.metadata?.tags && String(result.metadata.tags).trim() && (
+                  {meta.tags && meta.tags.trim() && (
                     <div className="mb-2 flex flex-wrap gap-1">
-                      {String(result.metadata.tags).split(',').slice(0, 4).map((t, i) => (
+                      {meta.tags.split(',').slice(0, 4).map((t, i) => (
                         <span key={i} className="px-1.5 py-0.5 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded text-[10px] font-medium">
                           {t.trim()}
                         </span>
@@ -405,9 +406,9 @@ export default function SearchPage() {
                     </div>
                   )}
 
-                  {result.metadata?.detected_objects && (
+                  {meta.detected_objects && (
                     <div className="mb-2 flex flex-wrap gap-1">
-                      {String(result.metadata.detected_objects).split(',').slice(0, 4).map((t, i) => (
+                      {meta.detected_objects.split(',').slice(0, 4).map((t, i) => (
                         <span key={i} className="px-1.5 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded text-[10px] font-medium">
                           {t.trim()}
                         </span>
@@ -416,9 +417,9 @@ export default function SearchPage() {
                   )}
 
                   {/* AI summary */}
-                  {result.metadata?.video_summary && (
+                  {meta.video_summary && (
                     <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mb-2 line-clamp-2">
-                      {String(result.metadata.video_summary)}
+                      {meta.video_summary}
                     </p>
                   )}
 
