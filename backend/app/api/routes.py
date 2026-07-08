@@ -780,7 +780,8 @@ def process_video_background(
                     temp_dir=temp_dir,
                     extractor=extractor,
                     image_analyzer=image_analyzer,
-                    storage=storage
+                    storage=storage,
+                    s3_key=s3_key,
                 )
                 
                 if chunk_result:
@@ -848,7 +849,16 @@ def process_video_background(
         manifest.processing_status = "completed"
         manifest.processing_timestamp = datetime.utcnow()
         manifest.ingestion_time_seconds = round(time.time() - start_time, 2)
-        
+
+        # ── Persist FAISS index to disk ────────────────────────────────────────
+        try:
+            from app.services.vector_index import get_vector_index
+            vi = get_vector_index()
+            vi.save()
+            logger.info(f"💾 FAISS index saved — {vi.total_vectors} total vectors")
+        except Exception as faiss_save_err:
+            logger.warning(f"FAISS save skipped: {faiss_save_err}")
+
         # Save final manifest
         artifact_manager.save_manifest(manifest)
 
@@ -895,7 +905,8 @@ def _process_video_chunk_simple(
     temp_dir: str,
     extractor: KeyframeExtractor,
     image_analyzer,
-    storage: S3Handler
+    storage: S3Handler,
+    s3_key: str = "",
 ):
     """Simplified chunk processing — GPU batch captioning + parallel DDN uploads."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -962,7 +973,7 @@ def _process_video_chunk_simple(
             all_captions.append(caption)
             all_objects.extend(detected_objects)
 
-        # ── 5. Parallel DDN keyframe uploads ──────────────────────────────────
+        # ── 5. Parallel DDN keyframe uploads + FAISS embedding ────────────────
         t2 = time.time()
         def _upload(task):
             b, key, meta, ct = task
@@ -972,6 +983,39 @@ def _process_video_chunk_simple(
             list(pool.map(_upload, upload_tasks))
 
         logger.info(f"  ⏱ DDN upload ({len(upload_tasks)} keyframes, parallel): {time.time()-t2:.2f}s")
+
+        # ── 5b. FAISS: compute CLIP embeddings + add to vector index ──────────
+        try:
+            from app.services.vector_index import get_vector_index
+            vector_index = get_vector_index()
+            faiss_embeddings = []
+            faiss_metadatas = []
+            for kf, caption in zip(valid_keyframes, captions):
+                emb = image_analyzer.compute_clip_embedding(
+                    keyframe_images[valid_keyframes.index(kf)]
+                )
+                if emb is not None and len(emb) == 512:
+                    faiss_embeddings.append(emb)
+                    faiss_metadatas.append({
+                        "asset_id":    asset_id,
+                        "media_type":  "video",
+                        "s3_key":      s3_key,
+                        "chunk_id":    chunk.chunk_id,
+                        "frame_id":    kf.frame_id,
+                        "timestamp":   kf.timestamp,
+                        "caption":     caption,
+                        "tags":        _extract_objects_simple(caption),
+                        "source":      "upload",
+                    })
+            if faiss_embeddings:
+                import numpy as np
+                vector_index.add_batch(
+                    np.stack(faiss_embeddings),
+                    faiss_metadatas
+                )
+                logger.info(f"  📌 FAISS: added {len(faiss_embeddings)} vectors (total={vector_index.total_vectors})")
+        except Exception as faiss_err:
+            logger.warning(f"  ⚠️ FAISS indexing skipped for chunk {chunk.chunk_id}: {faiss_err}")
 
         # ── 6. Build chunk analysis result ────────────────────────────────────
         chunk_analysis = {
@@ -1200,12 +1244,207 @@ async def upload_document(
 
 # ============== Search Routes ==============
 
+
+@search_router.get("/index/stats")
+async def get_index_stats():
+    """Return FAISS vector index statistics."""
+    try:
+        from app.services.vector_index import get_vector_index
+        idx = get_vector_index()
+        return idx.stats()
+    except Exception as e:
+        return {"total_vectors": 0, "error": str(e), "mode": "unavailable"}
+
+
+@search_router.post("/reindex")
+async def reindex_all(
+    background_tasks: BackgroundTasks,
+):
+    """
+    Re-build the FAISS index from all existing manifests stored in INFINIA.
+    Runs in the background — returns immediately.
+    """
+    background_tasks.add_task(_reindex_background)
+    return {"status": "reindex started", "message": "Reindexing all existing assets in background"}
+
+
+def _reindex_background():
+    """Walk every manifest in INFINIA and re-embed all keyframes into FAISS."""
+    from app.services.vector_index import get_vector_index
+    from app.services.artifact_manager import artifact_manager
+    from app.services.ai_models import get_image_analyzer
+    import numpy as np
+    import tempfile
+
+    logger.info("🔄 Reindex started — scanning INFINIA for manifests...")
+    vector_index   = get_vector_index()
+    image_analyzer = get_image_analyzer()
+    storage        = S3Handler('ddn_infinia', storage_config.local_cache_config)
+
+    if not image_analyzer.models_loaded:
+        logger.error("❌ Reindex aborted — AI models not loaded")
+        return
+
+    # List all manifest objects
+    try:
+        response = storage.client.list_objects_v2(
+            Bucket=storage.config['bucket_name'],
+            Prefix="media/derived/manifests/"
+        ) if storage._ensure_client() else {}
+    except Exception as e:
+        logger.error(f"❌ Reindex: could not list manifests: {e}")
+        return
+
+    manifest_keys = [
+        o['Key'] for o in response.get('Contents', [])
+        if o['Key'].endswith('manifest_v1.json')
+    ]
+    logger.info(f"Found {len(manifest_keys)} manifests to reindex")
+
+    total_vectors = 0
+    for mk in manifest_keys:
+        # Extract asset_id from key: media/derived/manifests/{asset_id}/manifest_v1.json
+        try:
+            asset_id = mk.split('/')[-2]
+            manifest = artifact_manager.load_manifest(asset_id)
+            if not manifest:
+                continue
+
+            # Remove stale vectors for this asset first
+            vector_index.delete_by_asset(asset_id)
+
+            # Walk each chunk → keyframe
+            for chunk in manifest.chunks:
+                for kf in chunk.get('keyframes', []) if isinstance(chunk, dict) else chunk.keyframes:
+                    kf_data = kf if isinstance(kf, dict) else kf.model_dump()
+                    kf_s3_key = kf_data.get('s3_key', '')
+                    if not kf_s3_key:
+                        continue
+                    try:
+                        kf_bytes, _ = storage.download_bytes(kf_s3_key)
+                        if not kf_bytes:
+                            continue
+                        from PIL import Image
+                        import io
+                        img = Image.open(io.BytesIO(kf_bytes)).convert('RGB')
+                        emb = image_analyzer.compute_clip_embedding(img)
+                        if emb is not None and len(emb) == 512:
+                            vector_index.add(emb, {
+                                "asset_id":   asset_id,
+                                "media_type": manifest.media_type or "video",
+                                "s3_key":     manifest.s3_key or "",
+                                "chunk_id":   kf_data.get('chunk_id', 0),
+                                "frame_id":   kf_data.get('frame_id', 0),
+                                "timestamp":  kf_data.get('timestamp', 0),
+                                "caption":    kf_data.get('caption', ""),
+                                "tags":       manifest.enriched_tags or [],
+                                "source":     "reindex",
+                            })
+                            total_vectors += 1
+                    except Exception as kf_err:
+                        logger.warning(f"  Skipped keyframe {kf_s3_key}: {kf_err}")
+
+            logger.info(f"  ✅ Reindexed asset {asset_id}")
+
+        except Exception as asset_err:
+            logger.warning(f"  Skipped manifest {mk}: {asset_err}")
+
+    vector_index.save()
+    logger.info(f"🏁 Reindex complete — {total_vectors} vectors added, index total={vector_index.total_vectors}")
+
+
 @search_router.post("/", response_model=SearchResponse)
 async def semantic_search(request: SearchRequest):
-    """Perform semantic search across stored content."""
+    """Perform semantic search across stored content.
+
+    Search priority:
+    1. FAISS vector search (when index has vectors) — fast cosine similarity on
+       all CLIP-embedded keyframes, works in full production S3 mode.
+    2. Legacy local-cache embedding search (JSON sidecar files).
+    3. Keyword / metadata fallback (always available).
+    """
     start_time = time.perf_counter()
+    search_mode = "keyword"   # updated below
 
     try:
+        # ── 1. Try FAISS vector search first ──────────────────────────────────
+        try:
+            from app.services.vector_index import get_vector_index
+            from app.services.ai_models import get_image_analyzer
+            import numpy as np
+
+            vector_index   = get_vector_index()
+            image_analyzer = get_image_analyzer()
+
+            if vector_index.total_vectors > 0 and image_analyzer.models_loaded:
+                query_emb = image_analyzer.compute_text_embedding(request.query)
+
+                if query_emb is not None and len(query_emb) == 512:
+                    media_type_filter = (
+                        request.modality if request.modality != "all" else None
+                    )
+                    hits = vector_index.search(
+                        query_emb,
+                        k=request.top_k * 3,          # over-fetch; group by asset below
+                        min_score=request.threshold,
+                        media_type=media_type_filter,
+                    )
+
+                    # Group by asset_id — keep best-scoring frame per asset
+                    best: dict[str, dict] = {}
+                    for h in hits:
+                        aid = h["asset_id"]
+                        if aid not in best or h["score"] > best[aid]["score"]:
+                            best[aid] = h
+
+                    if best:
+                        handler = S3Handler('ddn_infinia', storage_config.local_cache_config)
+                        faiss_results = []
+                        for hit in sorted(best.values(), key=lambda x: x["score"], reverse=True)[: request.top_k]:
+                            s3_key = hit.get("s3_key", "")
+                            presigned_url = handler.generate_presigned_url(s3_key) if s3_key else ""
+                            from app.models.schemas import StorageInfo
+                            faiss_results.append(SearchResult(
+                                object_key=s3_key,
+                                modality=hit.get("media_type", "video"),
+                                relevance_score=hit["score"],
+                                metadata={
+                                    "caption":          hit.get("caption", ""),
+                                    "tags":             ", ".join(hit.get("tags", [])),
+                                    "timestamp":        hit.get("timestamp", 0),
+                                    "frame_id":         hit.get("frame_id", 0),
+                                    "chunk_id":         hit.get("chunk_id", 0),
+                                    "faiss_score":      round(hit["score"], 4),
+                                    "search_mode":      "vector",
+                                    "stream_name":      hit.get("stream_name", ""),
+                                },
+                                size_bytes=0,
+                                last_modified="",
+                                presigned_url=presigned_url,
+                                storage_info=StorageInfo(
+                                    source="ddn_infinia",
+                                    storage_class="INTELLIGENT_TIERING",
+                                    access_control={"read": True, "write": True, "delete": True},
+                                    protocol="S3",
+                                    encryption="AES256",
+                                    versioning_enabled=True,
+                                    retrieval_time_ms=2.5,
+                                )
+                            ))
+
+                        search_mode = "vector"
+                        logger.info(f"🔍 FAISS vector search: {len(faiss_results)} results in {(time.perf_counter()-start_time)*1000:.1f}ms")
+                        return SearchResponse(
+                            success=True,
+                            query=request.query,
+                            total_results=len(faiss_results),
+                            results=faiss_results,
+                            search_time_ms=(time.perf_counter() - start_time) * 1000
+                        )
+        except Exception as faiss_err:
+            logger.warning(f"FAISS search failed, falling back to keyword: {faiss_err}")
+
+        # ── 2. Legacy keyword / local-cache search (original code) ────────────
         handler = S3Handler('ddn_infinia', storage_config.local_cache_config)
         objects, msg = handler.list_objects(include_metadata=True)
         
@@ -1394,7 +1633,7 @@ async def semantic_search(request: SearchRequest):
                     object_key=obj['key'],
                     modality=modality,
                     relevance_score=score,
-                    metadata=metadata,
+                    metadata={**metadata, "search_mode": "keyword"},
                     size_bytes=obj.get('size', 0),
                     last_modified=obj.get('last_modified', ''),
                     presigned_url=presigned_url,
@@ -1414,6 +1653,7 @@ async def semantic_search(request: SearchRequest):
         results.sort(key=lambda x: x.relevance_score, reverse=True)
         results = results[:request.top_k]
 
+        logger.info(f"🔍 Keyword search: {len(results)} results in {(time.perf_counter()-start_time)*1000:.1f}ms")
         return SearchResponse(
             success=True,
             query=request.query,
@@ -1428,6 +1668,7 @@ async def semantic_search(request: SearchRequest):
         logger.error(f"Search error: {e}")
         logger.error(f"Traceback:\n{error_details}")
         raise HTTPException(status_code=500, detail=f"{str(e)}\n\nTraceback: {error_details}")
+
 
 
 # ============== Browse Routes ==============
@@ -1736,7 +1977,15 @@ async def delete_video_cascade(asset_id: str, raw_video_key: str = None):
                 failed_files.append({"pattern": pattern, "error": str(e)})
         
         logger.info(f"🎯 Deletion complete: {len(deleted_files)} files deleted, {len(failed_files)} failures")
-        
+
+        # ── Remove from FAISS vector index ────────────────────────────────────
+        try:
+            from app.services.vector_index import get_vector_index
+            removed = get_vector_index().delete_by_asset(asset_id)
+            logger.info(f"🗑️ FAISS: removed {removed} vectors for asset {asset_id}")
+        except Exception as faiss_del_err:
+            logger.warning(f"FAISS cleanup skipped: {faiss_del_err}")
+
         if failed_files:
             return {
                 "success": False,
@@ -1756,6 +2005,7 @@ async def delete_video_cascade(asset_id: str, raw_video_key: str = None):
     except Exception as e:
         logger.error(f"💥 Error in cascade delete: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 
 # ============== Health Routes ==============

@@ -36,3 +36,9 @@ kombu>=5.3.0  # Celery messaging library
 # Utilities
 numpy>=1.24.0
 python-dotenv>=1.0.0
+requests>=2.31.0
+
+# Vector Search (FAISS — GPU build preferred, CPU fallback)
+# On server: pip install faiss-gpu  (requires matching CUDA version)
+# Fallback:  pip install faiss-cpu  (always works, still fast at demo scale)
+faiss-cpu>=1.7.4
