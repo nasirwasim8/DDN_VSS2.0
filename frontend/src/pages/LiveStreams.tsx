@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
+
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Radio, Plus, Trash2, Play, Square, Loader2, Wifi, WifiOff,
+  Radio, Plus, Trash2, Play, Loader2, Wifi, WifiOff,
   Database, AlertTriangle, Activity, RefreshCw, Camera, Video
 } from 'lucide-react'
 import toast from 'react-hot-toast'
