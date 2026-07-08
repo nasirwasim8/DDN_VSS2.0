@@ -60,6 +60,7 @@ search_router = APIRouter(prefix="/search", tags=["Search"])
 browse_router = APIRouter(prefix="/browse", tags=["Browse"])
 ingestion_router = APIRouter(prefix="/ingestion", tags=["Continuous Ingestion"])
 health_router = APIRouter(tags=["Health"])
+rtsp_router = APIRouter(prefix="/rtsp", tags=["RTSP Live Streams"])
 
 # Initialize bucket monitor
 bucket_monitor = BucketMonitor()
@@ -2163,8 +2164,108 @@ async def stream_processing_events():
         bucket_monitor.stream_events(),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+    "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no"  # Disable nginx buffering
+        }
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  RTSP Live Stream Ingestion Routes
+# ══════════════════════════════════════════════════════════════════════════════
+
+@rtsp_router.get("/streams")
+async def list_rtsp_streams():
+    """List all active RTSP streams and their ingestion status."""
+    from app.services.rtsp_ingestor import get_rtsp_ingestor
+    return get_rtsp_ingestor().list_streams()
+
+
+@rtsp_router.post("/streams")
+async def add_rtsp_stream(request: Request):
+    """Add and immediately start ingesting a new RTSP stream."""
+    from app.services.rtsp_ingestor import get_rtsp_ingestor
+    body = await request.json()
+    name        = body.get("name", "").strip()
+    url         = body.get("url", "").strip()
+    description = body.get("description", "")
+    tags        = body.get("tags", [])
+
+    if not name or not url:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="'name' and 'url' are required")
+
+    ingestor = get_rtsp_ingestor()
+    info = ingestor.add_stream(name=name, url=url, description=description, tags=tags)
+    logger.info(f"🎥 RTSP stream added: {info.stream_id} → {url}")
+    return ingestor._stream_dict(info)
+
+
+@rtsp_router.get("/streams/{stream_id}")
+async def get_rtsp_stream(stream_id: str):
+    """Get status of a single RTSP stream."""
+    from app.services.rtsp_ingestor import get_rtsp_ingestor
+    from fastapi import HTTPException
+    info = get_rtsp_ingestor().get_stream(stream_id)
+    if not info:
+        raise HTTPException(status_code=404, detail="Stream not found")
+    return info
+
+
+@rtsp_router.delete("/streams/{stream_id}")
+async def remove_rtsp_stream(stream_id: str):
+    """Stop ingesting and remove an RTSP stream."""
+    from app.services.rtsp_ingestor import get_rtsp_ingestor
+    from fastapi import HTTPException
+    ok = get_rtsp_ingestor().remove_stream(stream_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Stream not found")
+    return {"status": "removed", "stream_id": stream_id}
+
+
+@rtsp_router.get("/stream/{stream_id}/preview")
+async def rtsp_stream_preview_sse(stream_id: str):
+    """
+    Server-Sent Events endpoint that emits the latest JPEG frame from an
+    RTSP stream as a base64-encoded JSON object every ~2 seconds.
+    Connect with: EventSource('/api/rtsp/stream/<id>/preview')
+    """
+    import asyncio, base64
+    from app.services.rtsp_ingestor import get_rtsp_ingestor
+    from fastapi import HTTPException
+
+    ingestor = get_rtsp_ingestor()
+    q = ingestor.get_frame_queue(stream_id)
+    if q is None:
+        raise HTTPException(status_code=404, detail="Stream not found")
+
+    async def event_generator():
+        import json
+        while True:
+            try:
+                # Wait up to 3s for a new frame
+                frame = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda: q.get(timeout=3)
+                )
+                jpeg_b64 = base64.b64encode(frame["jpeg"]).decode()
+                payload  = json.dumps({
+                    "stream_id": frame["stream_id"],
+                    "ts":        frame["ts"],
+                    "jpeg_b64":  jpeg_b64,
+                })
+                yield f"data: {payload}\n\n"
+            except Exception:
+                # Queue empty or stream stopped — send heartbeat
+                yield "data: {\"heartbeat\": true}\n\n"
+                await asyncio.sleep(1)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control":    "no-cache",
+            "Connection":       "keep-alive",
+            "X-Accel-Buffering":"no",
         }
     )

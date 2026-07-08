@@ -11,6 +11,7 @@ import VideoSearchPage from './pages/VideoSearch'
 import ContinuousIngestionPage from './pages/ContinuousIngestion'
 import AboutPage from './pages/About'
 import GtcDeck from './pages/GtcDeck'
+import LiveStreamsPage from './pages/LiveStreams'
 
 
 // Top-level navigation
@@ -28,6 +29,7 @@ const demoTabs = [
   { id: 'search', label: 'Search', icon: 'search' },
   { id: 'video-search', label: 'Video Search', icon: 'video' },
   { id: 'browse', label: 'Library', icon: 'folder' },
+  { id: 'live-streams', label: 'Live Streams', icon: 'radio' },
 ]
 
 
@@ -60,6 +62,8 @@ function App() {
         return <VideoSearchPage />
       case 'browse':
         return <BrowsePage />
+      case 'live-streams':
+        return <LiveStreamsPage />
       default:
         return <ConfigurationPage />
     }

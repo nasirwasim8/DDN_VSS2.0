@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Settings, Upload, Search, FolderOpen, Zap, Cpu } from 'lucide-react'
+import { Settings, Upload, Search, FolderOpen, Zap, Cpu, Film, RefreshCw, Video, Radio } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
 
 interface Tab {
@@ -22,10 +22,14 @@ interface HealthStatus {
 }
 
 const iconMap: Record<string, React.ReactNode> = {
-  settings: <Settings className="w-5 h-5" />,
-  upload: <Upload className="w-5 h-5" />,
-  search: <Search className="w-5 h-5" />,
-  folder: <FolderOpen className="w-5 h-5" />,
+  settings:    <Settings   className="w-5 h-5" />,
+  upload:      <Upload     className="w-5 h-5" />,
+  search:      <Search     className="w-5 h-5" />,
+  folder:      <FolderOpen className="w-5 h-5" />,
+  film:        <Film       className="w-5 h-5" />,
+  'refresh-cw':<RefreshCw  className="w-5 h-5" />,
+  video:       <Video      className="w-5 h-5" />,
+  radio:       <Radio      className="w-5 h-5" />,
 }
 
 export default function DemoSidebar({ tabs, activeTab, onTabChange }: DemoSidebarProps) {

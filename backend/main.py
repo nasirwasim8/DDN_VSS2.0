@@ -25,7 +25,8 @@ from app.api.routes import (
     search_router,
     browse_router,
     health_router,
-    ingestion_router
+    ingestion_router,
+    rtsp_router,
 )
 from app.services.ai_models import get_image_analyzer, get_video_analyzer, get_document_analyzer
 
@@ -85,6 +86,7 @@ app.include_router(upload_router, prefix="/api")
 app.include_router(search_router, prefix="/api")
 app.include_router(browse_router, prefix="/api")
 app.include_router(ingestion_router, prefix="/api")
+app.include_router(rtsp_router,      prefix="/api")
 
 
 @app.get("/")
