@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-
+import Hls from 'hls.js'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Radio, Plus, Trash2, Play, Loader2, Wifi, WifiOff,
@@ -54,47 +54,68 @@ const DEMO_PRESETS = [
   },
 ]
 
-// ── Live frame preview component ──────────────────────────────────────────────
-function LiveFramePreview({ streamId, status }: { streamId: string; status: string }) {
-  const imgRef   = useRef<HTMLImageElement>(null)
-  const esRef    = useRef<EventSource | null>(null)
-  const [hasFrame, setHasFrame] = useState(false)
+// ── HLS video preview component ──────────────────────────────────────────────
+// Maps rtsp://host:8554/path → /hls/path/index.m3u8 (proxied by Vite → MediaMTX :8888)
+function getHlsUrl(rtspUrl: string): string | null {
+  const match = rtspUrl.match(/rtsp:\/\/[^:]+:\d+\/(.+)/)
+  return match ? `/hls/${match[1]}/index.m3u8` : null
+}
+
+function LiveFramePreview({ streamUrl, status }: { streamUrl: string; status: string }) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const hlsRef   = useRef<Hls | null>(null)
+  const [ready, setReady]   = useState(false)
   const [error, setError]   = useState(false)
 
   useEffect(() => {
     if (status !== 'running') return
+    const hlsUrl = getHlsUrl(streamUrl)
+    if (!hlsUrl || !videoRef.current) return
 
-    const es = new EventSource(`/api/rtsp/stream/${streamId}/preview`)
-    esRef.current = es
+    setReady(false)
+    setError(false)
 
-    es.onmessage = (evt) => {
-      try {
-        const data = JSON.parse(evt.data)
-        if (data.jpeg_b64 && imgRef.current) {
-          imgRef.current.src = `data:image/jpeg;base64,${data.jpeg_b64}`
-          setHasFrame(true)
-          setError(false)
-        }
-      } catch {}
-    }
+    const video = videoRef.current
 
-    es.onerror = () => {
+    if (Hls.isSupported()) {
+      const hls = new Hls({
+        lowLatencyMode:    true,
+        backBufferLength:  0,      // discard old segments to stay near live edge
+        maxBufferLength:   4,      // keep only 4s in buffer
+        liveSyncDurationCount: 1,
+      })
+      hlsRef.current = hls
+      hls.loadSource(hlsUrl)
+      hls.attachMedia(video)
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        video.play().catch(() => {})
+        setReady(true)
+      })
+      hls.on(Hls.Events.ERROR, (_e, data) => {
+        if (data.fatal) setError(true)
+      })
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // Safari — native HLS support
+      video.src = hlsUrl
+      video.play().catch(() => {})
+      video.onloadeddata = () => setReady(true)
+      video.onerror = () => setError(true)
+    } else {
       setError(true)
-      es.close()
     }
 
     return () => {
-      es.close()
-      esRef.current = null
+      hlsRef.current?.destroy()
+      hlsRef.current = null
     }
-  }, [streamId, status])
+  }, [streamUrl, status])
 
   if (status !== 'running') {
     return (
       <div className="w-full aspect-video bg-neutral-100 dark:bg-neutral-800 rounded-xl flex items-center justify-center">
         <div className="text-center">
           <Video className="w-8 h-8 mx-auto mb-2 text-neutral-400" />
-          <p className="text-xs text-neutral-400">Stream {status}</p>
+          <p className="text-xs text-neutral-400 capitalize">Stream {status}</p>
         </div>
       </div>
     )
@@ -102,32 +123,40 @@ function LiveFramePreview({ streamId, status }: { streamId: string; status: stri
 
   return (
     <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden">
-      {/* Live badge */}
+      {/* LIVE badge */}
       <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5 px-2 py-1 rounded-full bg-red-600 text-white text-[10px] font-bold">
         <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
         LIVE
       </div>
 
-      {!hasFrame && !error && (
-        <div className="absolute inset-0 flex items-center justify-center">
+      {/* Loading spinner */}
+      {!ready && !error && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
           <Loader2 className="w-6 h-6 text-white/60 animate-spin" />
+          <p className="text-[10px] text-white/40">Buffering HLS…</p>
         </div>
       )}
 
+      {/* Error state */}
       {error && (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center">
-            <WifiOff className="w-6 h-6 mx-auto mb-1 text-white/60" />
-            <p className="text-xs text-white/60">Preview unavailable</p>
+            <WifiOff className="w-6 h-6 mx-auto mb-1 text-white/50" />
+            <p className="text-xs text-white/50">HLS stream not ready yet</p>
+            <p className="text-[10px] text-white/30 mt-1">MediaMTX may need ~10s to buffer</p>
           </div>
         </div>
       )}
 
-      <img
-        ref={imgRef}
-        alt="Live preview"
+      {/* Video element — continuous HLS playback */}
+      <video
+        ref={videoRef}
+        autoPlay
+        muted
+        playsInline
+        loop={false}
         className="w-full h-full object-cover"
-        style={{ display: hasFrame ? 'block' : 'none' }}
+        style={{ display: ready ? 'block' : 'none' }}
       />
     </div>
   )
@@ -151,8 +180,8 @@ function StreamCard({ stream, onRemove }: { stream: StreamInfo; onRemove: (id: s
       className="card-elevated p-0 overflow-hidden transition-all duration-200"
       style={{ borderTop: `2px solid ${statusColor}` }}
     >
-      {/* Live preview */}
-      <LiveFramePreview streamId={stream.stream_id} status={stream.status} />
+      {/* Live preview — HLS continuous video */}
+      <LiveFramePreview streamUrl={stream.url} status={stream.status} />
 
       {/* Info */}
       <div className="p-4 space-y-3">
