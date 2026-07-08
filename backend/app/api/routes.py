@@ -1014,6 +1014,7 @@ def _process_video_chunk_simple(
                     np.stack(faiss_embeddings),
                     faiss_metadatas
                 )
+                vector_index.save()  # ← persist to disk immediately after each chunk
                 logger.info(f"  📌 FAISS: added {len(faiss_embeddings)} vectors (total={vector_index.total_vectors})")
         except Exception as faiss_err:
             logger.warning(f"  ⚠️ FAISS indexing skipped for chunk {chunk.chunk_id}: {faiss_err}")
@@ -1345,7 +1346,8 @@ def _reindex_background():
                     except Exception as kf_err:
                         logger.warning(f"  Skipped keyframe {kf_s3_key}: {kf_err}")
 
-            logger.info(f"  ✅ Reindexed asset {asset_id}")
+            logger.info(f"  ✅ Reindexed asset {asset_id} — total so far: {vector_index.total_vectors}")
+            vector_index.save()  # save after each asset so partial progress persists
 
         except Exception as asset_err:
             logger.warning(f"  Skipped manifest {mk}: {asset_err}")

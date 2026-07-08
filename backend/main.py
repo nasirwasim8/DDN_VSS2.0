@@ -57,6 +57,23 @@ async def lifespan(app: FastAPI):
     get_document_analyzer()
     print("AI models ready.\n")
 
+    # ── Auto-reindex if FAISS index is empty on startup ───────────────────────
+    # This ensures that after a server restart the vector index is rebuilt
+    # from existing INFINIA assets automatically — no manual intervention needed.
+    try:
+        import threading
+        from app.services.vector_index import get_vector_index
+        from app.api.routes import _reindex_background
+        vi = get_vector_index()
+        if vi.total_vectors == 0:
+            print("📦 FAISS index is empty — triggering background reindex from INFINIA...")
+            t = threading.Thread(target=_reindex_background, daemon=True, name="startup-reindex")
+            t.start()
+        else:
+            print(f"✅ FAISS index loaded — {vi.total_vectors} vectors ready")
+    except Exception as e:
+        print(f"⚠️  Could not check/start FAISS reindex: {e}")
+
     yield
 
     print("\nShutting down...")
