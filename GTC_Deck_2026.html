@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DDN × NVIDIA VSS — GTC 2026 Deck</title>
+<meta name="description" content="DDN INFINIA × NVIDIA VSS Blueprint — Multimodal Semantic Video Search with RTSP, FAISS GPU, and CLIP AI" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js"></script>
+
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --ddn-red:    #ED2738;
+    --nv-green:   #76B900;
+    --blue:       #3B82F6;
+    --amber:      #F59E0B;
+    --emerald:    #10B981;
+    --purple:     #8B5CF6;
+    --slate-900:  #0F172A;
+    --slate-800:  #1E293B;
+    --slate-700:  #334155;
+    --slate-500:  #64748B;
+    --slate-400:  #94A3B8;
+    --slate-300:  #CBD5E1;
+    --slate-200:  #E2E8F0;
+    --slate-100:  #F1F5F9;
+    --slate-50:   #F8FAFC;
+  }
+  html, body { height: 100%; font-family: 'Inter', sans-serif; background: #E2E8F0; overflow: hidden; }
+
+  /* ── Layout ── */
+  #app { display: flex; flex-direction: column; height: 100vh; }
+  #topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 24px; background: white; border-bottom: 1px solid var(--slate-100);
+    flex-shrink: 0; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+  #slides-wrapper { flex: 1; position: relative; overflow: hidden; }
+  .slide { position: absolute; inset: 0; display: none; }
+  .slide.active { display: flex; }
+  #bottombar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 24px; background: white; border-top: 1px solid var(--slate-100);
+    flex-shrink: 0;
+  }
+
+  /* ── Typography ── */
+  .h1 { font-size: clamp(2.5rem, 4vw, 3.5rem); font-weight: 900; line-height: 1.05; }
+  .h2 { font-size: clamp(1.6rem, 2.5vw, 2.25rem); font-weight: 900; line-height: 1.1; }
+  .label-tag { font-size: 10px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; color: var(--nv-green); }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* ── Topbar ── */
+  .topbar-left { display: flex; align-items: center; gap: 10px; }
+  .topbar-label { font-size: 10px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; color: var(--nv-green); }
+  .dot-sep { width: 4px; height: 4px; border-radius: 50%; background: var(--slate-300); }
+  .slide-title-bar { font-size: 12px; color: var(--slate-400); }
+  .live-pill { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--slate-400); }
+  .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--nv-green);
+    box-shadow: 0 0 0 0 rgba(118,185,0,0.4); animation: pulse-green 2s infinite; }
+  @keyframes pulse-green {
+    0%   { box-shadow: 0 0 0 0 rgba(118,185,0,0.5); }
+    70%  { box-shadow: 0 0 0 6px rgba(118,185,0,0); }
+    100% { box-shadow: 0 0 0 0 rgba(118,185,0,0); }
+  }
+  .live-dot-red { background: white; box-shadow: 0 0 0 0 rgba(255,255,255,0.5); animation: pulse-white 1.5s infinite; }
+  @keyframes pulse-white { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+  /* ── Dots nav ── */
+  #dots { display: flex; align-items: center; gap: 6px; }
+  .dot-btn {
+    height: 6px; border-radius: 3px; border: none; cursor: pointer; transition: all 0.3s;
+    background: var(--slate-200);
+  }
+  .dot-btn.active { background: var(--nv-green); width: 24px !important; }
+
+  /* ── Nav buttons ── */
+  .nav-btn {
+    display: flex; align-items: center; gap: 6px; padding: 8px 16px;
+    border-radius: 10px; font-size: 12px; font-weight: 600; cursor: pointer;
+    border: 1px solid var(--slate-200); background: white; color: var(--slate-500);
+    transition: all 0.2s;
+  }
+  .nav-btn:hover:not(:disabled) { background: var(--slate-50); }
+  .nav-btn.next { background: #F4FBEA; color: var(--nv-green); border-color: rgba(118,185,0,0.35); }
+  .nav-btn.next:hover { background: #ECFDF3; }
+  .nav-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .fs-btn {
+    width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--slate-200);
+    background: var(--slate-100); color: var(--slate-400); cursor: pointer;
+    display: flex; align-items: center; justify-content: center; font-size: 14px;
+    transition: all 0.2s; margin-left: 8px;
+  }
+  .fs-btn:hover { background: var(--slate-200); }
+
+  /* ── Slide transition ── */
+  .slide { opacity: 0; transform: translateX(60px); transition: opacity 0.28s ease, transform 0.28s cubic-bezier(0.25,0.46,0.45,0.94); }
+  .slide.active { opacity: 1; transform: translateX(0); display: flex; }
+  .slide.exit-left { opacity: 0; transform: translateX(-60px); display: flex !important; }
+
+  /* ── Common layout ── */
+  .slide-inner { flex: 1; display: flex; flex-direction: column; padding: 36px 40px; background: white; overflow: hidden; }
+  .slide-header { margin-bottom: 20px; }
+  .slide-header-rule { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+  .slide-header-rule::after { content: ''; flex: 1; height: 1px; background: rgba(118,185,0,0.3); }
+  .slide-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+  /* ── Cards / grids ── */
+  .grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; }
+  .grid-2 { display: grid; grid-template-columns: repeat(2,1fr); gap: 16px; }
+  .grid-5 { display: grid; grid-template-columns: repeat(5,1fr); gap: 10px; }
+  .card { border-radius: 16px; padding: 20px; display: flex; flex-direction: column; }
+  .card-sm { border-radius: 12px; padding: 14px; }
+  .flex-row { display: flex; gap: 20px; }
+  .flex-col { display: flex; flex-direction: column; gap: 12px; }
+  .mt-auto { margin-top: auto; }
+  .flex-1 { flex: 1; min-width: 0; }
+  .shrink-0 { flex-shrink: 0; }
+
+  /* ── Pill / badge ── */
+  .pill { border-radius: 999px; font-size: 10px; font-weight: 700; padding: 4px 10px; display: inline-flex; align-items: center; gap: 6px; }
+  .pill-green { background: #F4FBEA; color: var(--nv-green); border: 1px solid rgba(118,185,0,0.3); }
+  .pill-red   { background: #FFF0F1; color: var(--ddn-red);  border: 1px solid rgba(237,39,56,0.2); }
+
+  /* ── Cover / Closing dark panels ── */
+  .dark-panel {
+    width: 280px; flex-shrink: 0; display: flex; flex-direction: column; justify-content: space-between;
+    padding: 32px; background: linear-gradient(160deg, #1E293B 60%, #0F172A 100%);
+    border-right: 1px solid rgba(255,255,255,0.06);
+  }
+  .accent-bar { width: 6px; flex-shrink: 0; background: linear-gradient(to bottom, var(--ddn-red), var(--nv-green)); }
+
+  /* ── Pipeline steps ── */
+  .pipeline { display: flex; align-items: stretch; gap: 0; margin-bottom: 16px; }
+  .pipe-step {
+    flex: 1; border-radius: 14px; padding: 12px; display: flex; flex-direction: column; align-items: center;
+    text-align: center;
+  }
+  .pipe-arrow { width: 16px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: var(--slate-300); font-size: 12px; }
+
+  /* ── KPI badges ── */
+  .kpi { border-radius: 14px; padding: 12px 14px; text-align: center; }
+  .kpi-val { font-size: 1.4rem; font-weight: 900; }
+  .kpi-lbl { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--slate-400); margin-top: 2px; }
+
+  /* ── RTSP video cards ── */
+  .video-card { border-radius: 16px; overflow: hidden; background: #0F172A; position: relative; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+  .video-card video, .video-card .video-placeholder { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; }
+  .video-card .video-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; aspect-ratio: 16/9; }
+  .video-overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 50%); pointer-events: none; }
+  .live-badge {
+    position: absolute; top: 10px; left: 10px; background: rgba(220,38,38,0.9);
+    border-radius: 999px; padding: 2px 8px; display: flex; align-items: center; gap: 5px;
+    font-size: 9px; font-weight: 800; color: white; letter-spacing: 0.1em; backdrop-filter: blur(4px);
+  }
+  .res-badge {
+    position: absolute; top: 10px; right: 10px;
+    background: rgba(118,185,0,0.88); border-radius: 6px; padding: 2px 8px;
+    font-size: 9px; font-weight: 800; color: white;
+  }
+  .cam-label { position: absolute; bottom: 10px; left: 12px; font-size: 11px; color: rgba(255,255,255,0.85); font-weight: 600; }
+  .spinner { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--nv-green); border-top-color: transparent; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Counter animation ── */
+  .counter-val { font-size: 14px; font-weight: 900; font-family: 'JetBrains Mono', monospace; transition: all 0.3s; }
+
+  /* ── Search simulator ── */
+  .search-box {
+    display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+    border-radius: 12px; background: var(--slate-50); border: 1.5px solid var(--slate-200);
+    margin-bottom: 10px;
+  }
+  .search-icon { color: var(--slate-400); font-size: 16px; flex-shrink: 0; }
+  .search-text { flex: 1; font-size: 13px; font-family: 'JetBrains Mono', monospace; color: var(--slate-700); min-height: 20px; }
+  .cursor { display: inline-block; width: 2px; height: 14px; background: var(--nv-green); animation: blink 1s step-end infinite; vertical-align: middle; margin-left: 1px; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+  .query-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .query-btn {
+    padding: 5px 12px; border-radius: 999px; font-size: 11px; font-weight: 500; cursor: pointer;
+    border: 1px solid var(--slate-200); background: var(--slate-50); color: var(--slate-500); transition: all 0.2s;
+  }
+  .query-btn.active { background: #F4FBEA; color: var(--nv-green); border-color: rgba(118,185,0,0.4); }
+  .results-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+  .result-card { border-radius: 10px; overflow: hidden; border: 1px solid var(--slate-200); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+  .result-thumb { aspect-ratio: 16/9; background: var(--slate-100); position: relative; display: flex; align-items: center; justify-content: center; color: var(--slate-300); font-size: 20px; }
+  .result-score { position: absolute; top: 4px; right: 4px; background: var(--nv-green); color: white; font-size: 9px; font-weight: 800; padding: 2px 5px; border-radius: 4px; }
+  .result-meta { padding: 6px 8px; background: white; }
+  .result-meta p { font-size: 9px; color: var(--slate-400); font-family: 'JetBrains Mono', monospace; }
+  .results-note { font-size: 10px; color: var(--slate-300); text-align: center; margin-top: 8px; }
+
+  /* ── Infinia callout ── */
+  .infinia-box { border-radius: 16px; padding: 18px; margin-bottom: 14px; }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: var(--slate-200); border-radius: 2px; }
+
+  /* ── Fullscreen ── */
+  :fullscreen #app { height: 100vh; }
+  :-webkit-full-screen #app { height: 100vh; }
+
+  /* ── Responsive tweaks ── */
+  @media (max-width: 1200px) {
+    .h1 { font-size: 2.2rem; } .h2 { font-size: 1.6rem; }
+    .slide-inner { padding: 24px 28px; }
+    .dark-panel { width: 220px; padding: 24px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Top bar ──────────────────────────────────────────────────── -->
+  <div id="topbar">
+    <div class="topbar-left">
+      <span class="topbar-label">GTC 2026</span>
+      <span class="dot-sep"></span>
+      <span class="slide-title-bar" id="slide-title">Cover</span>
+      <span class="dot-sep"></span>
+      <span class="live-pill"><span class="live-dot"></span> 2 cameras live</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px">
+      <div id="dots"></div>
+      <div style="width:1px;height:16px;background:var(--slate-200);margin:0 8px"></div>
+      <button class="fs-btn" id="fs-btn" onclick="toggleFS()" title="F — fullscreen">⛶</button>
+    </div>
+  </div>
+
+  <!-- ── Slides ───────────────────────────────────────────────────── -->
+  <div id="slides-wrapper">
+
+    <!-- Slide 1 · Cover -->
+    <div class="slide active" id="slide-0">
+      <div class="accent-bar"></div>
+      <div class="dark-panel">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:32px">
+            <div style="width:8px;height:8px;border-radius:50%;background:var(--ddn-red)"></div>
+            <div style="width:8px;height:8px;border-radius:50%;background:var(--nv-green)"></div>
+            <span style="color:rgba(255,255,255,0.25);font-size:10px;font-family:'JetBrains Mono',monospace;margin-left:8px;letter-spacing:0.15em">GTC 2026</span>
+          </div>
+          <div style="font-size:48px;font-weight:900;color:white;line-height:1">DDN</div>
+          <div style="font-size:13px;font-weight:300;color:rgba(255,255,255,0.25);letter-spacing:0.3em;margin-bottom:28px">INFINIA</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <div style="width:28px;height:1px;background:rgba(255,255,255,0.1)"></div>
+            <span style="color:rgba(255,255,255,0.2);font-size:12px">×</span>
+            <div style="width:28px;height:1px;background:rgba(255,255,255,0.1)"></div>
+          </div>
+          <div style="font-size:26px;font-weight:900;color:var(--nv-green);margin-top:10px">NVIDIA</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.25);letter-spacing:0.2em;margin-top:2px">VSS BLUEPRINT</div>
+        </div>
+        <div>
+          <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
+            <div style="display:flex;align-items:center;gap:8px"><div style="width:6px;height:6px;border-radius:50%;background:var(--ddn-red);flex-shrink:0"></div><span style="font-size:11px;color:rgba(255,255,255,0.45);font-weight:500">RTSP Live Ingestion</span></div>
+            <div style="display:flex;align-items:center;gap:8px"><div style="width:6px;height:6px;border-radius:50%;background:var(--nv-green);flex-shrink:0"></div><span style="font-size:11px;color:rgba(255,255,255,0.45);font-weight:500">FAISS GPU Vector DB</span></div>
+            <div style="display:flex;align-items:center;gap:8px"><div style="width:6px;height:6px;border-radius:50%;background:var(--blue);flex-shrink:0"></div><span style="font-size:11px;color:rgba(255,255,255,0.45);font-weight:500">CLIP · BLIP · VLM</span></div>
+            <div style="display:flex;align-items:center;gap:8px"><div style="width:6px;height:6px;border-radius:50%;background:var(--amber);flex-shrink:0"></div><span style="font-size:11px;color:rgba(255,255,255,0.45);font-weight:500">DDN INFINIA Storage</span></div>
+          </div>
+          <div style="border-top:1px solid rgba(255,255,255,0.07);padding-top:12px">
+            <div style="font-size:9px;color:rgba(255,255,255,0.18);text-transform:uppercase;letter-spacing:0.2em">DDN Theatre · Build.DDN:VSS</div>
+          </div>
+        </div>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:40px 56px;background:white">
+        <div class="pill pill-green" style="margin-bottom:28px;width:fit-content">
+          <span class="live-dot" style="width:8px;height:8px;border-radius:50%;background:var(--nv-green)"></span>
+          Live Demo System Active
+        </div>
+        <div class="h1" style="color:var(--slate-900);margin-bottom:6px">From Video</div>
+        <div class="h1" style="color:var(--ddn-red);margin-bottom:6px">Chaos</div>
+        <div class="h1" style="color:var(--slate-900);margin-bottom:28px">to Intelligence.</div>
+        <p style="color:var(--slate-500);font-size:15px;line-height:1.7;max-width:440px;margin-bottom:32px">
+          Real-time RTSP ingestion → CLIP GPU embedding → FAISS vector search →
+          natural language queries at any scale, stored on DDN INFINIA.
+        </p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <span class="pill" style="background:#FFF0F1;color:var(--ddn-red);border:1px solid rgba(237,39,56,0.25)">RTSP Live Streams</span>
+          <span class="pill" style="background:#F4FBEA;color:var(--nv-green);border:1px solid rgba(118,185,0,0.3)">FAISS GPU Index</span>
+          <span class="pill" style="background:#EFF6FF;color:var(--blue);border:1px solid rgba(59,130,246,0.25)">CLIP · BLIP · VLM</span>
+          <span class="pill" style="background:#FFFBEB;color:var(--amber);border:1px solid rgba(245,158,11,0.25)">LLM Enrichment</span>
+          <span class="pill" style="background:#ECFDF5;color:var(--emerald);border:1px solid rgba(16,185,129,0.25)">DDN INFINIA S3</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slide 2 · The Challenge -->
+    <div class="slide" id="slide-1">
+      <div class="slide-inner">
+        <div class="slide-header">
+          <div class="slide-header-rule"><span class="label-tag">02 — The Challenge</span></div>
+          <div class="h2" style="color:var(--slate-900);margin-bottom:6px">95% of Enterprise Video Is Dark Data</div>
+          <p style="color:var(--slate-400);font-size:13px">Petabytes sit unindexed, unsearchable, invisible to AI — a cost center with zero intelligence value.</p>
+        </div>
+        <div class="slide-body">
+          <div class="grid-3" style="flex:1">
+            <div class="card" style="background:#FFF0F1;border:1.5px solid rgba(237,39,56,0.2)">
+              <div style="font-size:32px;margin-bottom:10px">🕒</div>
+              <div style="font-size:15px;font-weight:700;color:var(--ddn-red);margin-bottom:8px">Hours of Manual Search</div>
+              <p style="color:var(--slate-500);font-size:13px;line-height:1.6">Analysts scrub footage frame-by-frame. CCTV has zero semantic awareness — no NLP, no AI, no context.</p>
+            </div>
+            <div class="card" style="background:#FFFBEB;border:1.5px solid rgba(245,158,11,0.2)">
+              <div style="font-size:32px;margin-bottom:10px">💸</div>
+              <div style="font-size:15px;font-weight:700;color:var(--amber);margin-bottom:8px">$2M–$5M Wasted Annually</div>
+              <p style="color:var(--slate-500);font-size:13px;line-height:1.6">Separate vector DB licenses, cloud egress costs, annotation tooling compound into runaway spend.</p>
+            </div>
+            <div class="card" style="background:#F5F3FF;border:1.5px solid rgba(139,92,246,0.2)">
+              <div style="font-size:32px;margin-bottom:10px">📡</div>
+              <div style="font-size:15px;font-weight:700;color:var(--purple);margin-bottom:8px">No Live Stream Intelligence</div>
+              <p style="color:var(--slate-500);font-size:13px;line-height:1.6">RTSP camera feeds generate terabytes daily — without real-time AI ingestion, every frame is immediately lost.</p>
+            </div>
+          </div>
+          <div style="margin-top:16px;border-radius:16px;padding:16px;display:flex;align-items:center;gap:14px;background:#F4FBEA;border:1.5px solid rgba(118,185,0,0.3)">
+            <div style="width:40px;height:40px;border-radius:12px;background:rgba(118,185,0,0.15);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">⚡</div>
+            <p style="color:var(--slate-600);font-size:13px;line-height:1.6">
+              <strong style="color:var(--slate-800)">DDN VSS</strong> solves this: real-time RTSP ingestion → CLIP GPU embedding → FAISS vector index → natural language search.
+              Built on the <strong style="color:var(--nv-green)">NVIDIA VSS Blueprint</strong>, co-located on DDN INFINIA.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slide 3 · Architecture -->
+    <div class="slide" id="slide-2">
+      <div class="slide-inner">
+        <div class="slide-header">
+          <div class="slide-header-rule"><span class="label-tag">03 — Architecture</span></div>
+          <div class="h2" style="color:var(--slate-900);margin-bottom:4px">NVIDIA VSS Blueprint + DDN INFINIA</div>
+          <p style="color:var(--slate-400);font-size:13px">Four AI layers · GPU-accelerated throughout · Zero separate vector DB license</p>
+        </div>
+        <div class="slide-body">
+          <div class="grid-4" style="flex:1">
+            <div class="card-sm" style="background:var(--slate-50);border:1.5px solid rgba(237,39,56,0.2);display:flex;flex-direction:column;gap:8px">
+              <div class="label-tag" style="color:var(--ddn-red)">LAYER 1 · Ingestion</div>
+              <div class="card-sm" style="background:rgba(237,39,56,0.06);border:1px solid rgba(237,39,56,0.2)"><div style="font-weight:700;font-size:12px;color:var(--slate-800)">📡 RTSP Live Streams</div><div style="font-size:10px;color:var(--slate-400);margin-top:3px">MediaMTX · H264 25fps</div></div>
+              <div class="card-sm" style="background:rgba(237,39,56,0.06);border:1px solid rgba(237,39,56,0.2)"><div style="font-weight:700;font-size:12px;color:var(--slate-800)">☁ Video File Upload</div><div style="font-size:10px;color:var(--slate-400);margin-top:3px">MP4 / MOV via UI</div></div>
+            </div>
+            <div class="card-sm" style="background:var(--slate-50);border:1.5px solid rgba(118,185,0,0.2);display:flex;flex-direction:column;gap:8px">
+              <div class="label-tag">LAYER 2 · AI Processing</div>
+              <div class="card-sm" style="background:rgba(118,185,0,0.06);border:1px solid rgba(118,185,0,0.2)"><div style="font-weight:700;font-size:12px;color:var(--slate-800)">🧠 CLIP ViT-B/32</div><div style="font-size:10px;color:var(--slate-400);margin-top:3px">512-dim embeddings · GPU</div></div>
+              <div class="card-sm" style="background:rgba(118,185,0,0.06);border:1px solid rgba(118,185,0,0.2)"><div style="font-weight:700;font-size:12px;color:var(--slate-800)">📝 BLIP Captioning</div><div style="font-size:10px;color:var(--slate-400);margin-top:3px">Keyframe descriptions</div></div>
+              <div class="card-sm" style="background:rgba(118,185,0,0.06);border:1px solid rgba(118,185,0,0.2)"><div style="font-weight:700;font-size:12px;color:var(--slate-800)">💬 LLM Enrichment</div><div style="font-size:10px;color:var(--slate-400);margin-top:3px">GPT-4o · Ollama 7B</div></div>
+            </div>
+            <div class="card-sm" style="background:var(--slate-50);border:1.5px solid rgba(59,130,246,0.2);display:flex;flex-direction:column;gap:8px">
+              <div class="label-tag" style="color:var(--blue)">LAYER 3 · Storage</div>
+              <div class="card-sm" style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.2)"><div style="font-weight:700;font-size:12px;color:var(--slate-800)">⚡ FAISS GPU Index</div><div style="font-size:10px;color:var(--slate-400);margin-top:3px">IndexFlatIP · cosine · persisted</div></div>
+              <div class="card-sm" style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.2)"><div style="font-weight:700;font-size:12px;color:var(--slate-800)">☁ DDN INFINIA S3</div><div style="font-size:10px;color:var(--slate-400);margin-top:3px">Keyframes + metadata</div></div>
+            </div>
+            <div class="card-sm" style="background:var(--slate-50);border:1.5px solid rgba(245,158,11,0.2);display:flex;flex-direction:column;gap:8px">
+              <div class="label-tag" style="color:var(--amber)">LAYER 4 · Query</div>
+              <div class="card-sm" style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2)"><div style="font-weight:700;font-size:12px;color:var(--slate-800)">🔍 Semantic Search</div><div style="font-size:10px;color:var(--slate-400);margin-top:3px">NL → CLIP → FAISS</div></div>
+              <div class="card-sm" style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2)"><div style="font-weight:700;font-size:12px;color:var(--slate-800)">🤖 RAG Pipeline</div><div style="font-size:10px;color:var(--slate-400);margin-top:3px">LLM synthesis over results</div></div>
+            </div>
+          </div>
+          <div class="grid-5" style="margin-top:14px">
+            <div class="kpi" style="background:#FFF0F1;border:1.5px solid rgba(237,39,56,0.2)"><div class="kpi-val" style="color:var(--ddn-red)">1fr/2s</div><div class="kpi-lbl">Capture Rate</div></div>
+            <div class="kpi" style="background:#F4FBEA;border:1.5px solid rgba(118,185,0,0.2)"><div class="kpi-val" style="color:var(--nv-green)">512d</div><div class="kpi-lbl">CLIP Vectors</div></div>
+            <div class="kpi" style="background:#EFF6FF;border:1.5px solid rgba(59,130,246,0.2)"><div class="kpi-val" style="color:var(--blue)">&lt;1ms</div><div class="kpi-lbl">FAISS Search</div></div>
+            <div class="kpi" style="background:#FFFBEB;border:1.5px solid rgba(245,158,11,0.2)"><div class="kpi-val" style="color:var(--amber)">10s</div><div class="kpi-lbl">INFINIA Store</div></div>
+            <div class="kpi" style="background:#ECFDF5;border:1.5px solid rgba(16,185,129,0.2)"><div class="kpi-val" style="color:var(--emerald)">25fps</div><div class="kpi-lbl">HLS Preview</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slide 4 · Live RTSP Streams -->
+    <div class="slide" id="slide-3">
+      <div class="slide-inner">
+        <div class="slide-header">
+          <div class="slide-header-rule"><span class="label-tag">04 — Live RTSP Ingestion</span></div>
+          <div class="h2" style="color:var(--slate-900);margin-bottom:4px">2 Live Camera Streams — Ingesting Now</div>
+          <p style="color:var(--slate-400);font-size:13px">OpenCV grabs 1 frame / 2s · CLIP GPU embeds · FAISS indexes · INFINIA stores every 10s</p>
+        </div>
+        <div class="slide-body">
+          <div class="flex-row" style="flex:1;min-height:0">
+            <!-- Cameras -->
+            <div style="flex:1;display:flex;flex-direction:column;gap:12px;min-width:0">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;flex:1">
+                <!-- Cam 1 -->
+                <div class="video-card">
+                  <div class="video-placeholder" id="cam1-placeholder">
+                    <div class="spinner"></div>
+                    <p style="color:var(--slate-500);font-size:11px">Connecting to Cam 1…</p>
+                  </div>
+                  <video id="cam1-video" style="display:none;width:100%;aspect-ratio:16/9;object-fit:cover" muted autoplay playsinline></video>
+                  <div class="video-overlay"></div>
+                  <div class="live-badge"><span class="live-dot live-dot-red"></span>LIVE</div>
+                  <span class="res-badge">768p</span>
+                  <span class="cam-label">Parking Lot — Cam 1</span>
+                </div>
+                <!-- Cam 3 -->
+                <div class="video-card">
+                  <div class="video-placeholder" id="cam3-placeholder">
+                    <div class="spinner"></div>
+                    <p style="color:var(--slate-500);font-size:11px">Connecting to Cam 3…</p>
+                  </div>
+                  <video id="cam3-video" style="display:none;width:100%;aspect-ratio:16/9;object-fit:cover" muted autoplay playsinline></video>
+                  <div class="video-overlay"></div>
+                  <div class="live-badge"><span class="live-dot live-dot-red"></span>LIVE</div>
+                  <span class="res-badge">1080p</span>
+                  <span class="cam-label">Entrance Gate — Cam 3</span>
+                </div>
+              </div>
+              <!-- Pipeline row -->
+              <div style="background:var(--slate-50);border:1px solid var(--slate-100);border-radius:14px;padding:12px">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <div style="flex:1;border-radius:10px;padding:8px 10px;text-align:center;background:rgba(237,39,56,0.07);border:1px solid rgba(237,39,56,0.2)"><div style="font-size:9px;font-weight:800;color:var(--ddn-red)">01</div><div style="font-size:10px;font-weight:700;color:var(--slate-800)">OpenCV RTSP</div></div>
+                  <span style="color:var(--slate-300);font-size:12px">→</span>
+                  <div style="flex:1;border-radius:10px;padding:8px 10px;text-align:center;background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.2)"><div style="font-size:9px;font-weight:800;color:var(--amber)">02</div><div style="font-size:10px;font-weight:700;color:var(--slate-800)">BGR→PIL</div></div>
+                  <span style="color:var(--slate-300);font-size:12px">→</span>
+                  <div style="flex:1;border-radius:10px;padding:8px 10px;text-align:center;background:rgba(118,185,0,0.07);border:1px solid rgba(118,185,0,0.2)"><div style="font-size:9px;font-weight:800;color:var(--nv-green)">03</div><div style="font-size:10px;font-weight:700;color:var(--slate-800)">CLIP GPU</div></div>
+                  <span style="color:var(--slate-300);font-size:12px">→</span>
+                  <div style="flex:1;border-radius:10px;padding:8px 10px;text-align:center;background:rgba(59,130,246,0.07);border:1px solid rgba(59,130,246,0.2)"><div style="font-size:9px;font-weight:800;color:var(--blue)">04</div><div style="font-size:10px;font-weight:700;color:var(--slate-800)">FAISS.add()</div></div>
+                  <span style="color:var(--slate-300);font-size:12px">→</span>
+                  <div style="flex:1;border-radius:10px;padding:8px 10px;text-align:center;background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.2)"><div style="font-size:9px;font-weight:800;color:var(--emerald)">05</div><div style="font-size:10px;font-weight:700;color:var(--slate-800)">INFINIA S3</div></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Counters panel -->
+            <div style="width:200px;flex-shrink:0;display:flex;flex-direction:column;gap:12px">
+              <div style="background:#F4FBEA;border:1.5px solid rgba(118,185,0,0.3);border-radius:16px;padding:16px">
+                <div class="label-tag" style="margin-bottom:12px">Live Counters</div>
+                <div style="display:flex;flex-direction:column;gap:0">
+                  <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.7)">
+                    <span style="font-size:11px;color:var(--slate-500)">Frames Captured</span>
+                    <span class="counter-val" id="cnt-captured" style="color:var(--ddn-red)">0</span>
+                  </div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.7)">
+                    <span style="font-size:11px;color:var(--slate-500)">FAISS Indexed</span>
+                    <span class="counter-val" id="cnt-indexed" style="color:var(--nv-green)">0</span>
+                  </div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0">
+                    <span style="font-size:11px;color:var(--slate-500)">INFINIA Stored</span>
+                    <span class="counter-val" id="cnt-stored" style="color:var(--blue)">0</span>
+                  </div>
+                </div>
+              </div>
+              <div style="flex:1;background:var(--slate-50);border:1px solid var(--slate-100);border-radius:16px;padding:14px">
+                <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:var(--slate-400);margin-bottom:10px">Stream Config</div>
+                <div style="display:flex;flex-direction:column;gap:0">
+                  <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--slate-100)"><span style="font-size:10px;color:var(--slate-400)">Protocol</span><span style="font-size:10px;font-weight:700;color:var(--slate-700)">RTSP / H264</span></div>
+                  <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--slate-100)"><span style="font-size:10px;color:var(--slate-400)">Server</span><span style="font-size:10px;font-weight:700;color:var(--slate-700)">MediaMTX :8554</span></div>
+                  <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--slate-100)"><span style="font-size:10px;color:var(--slate-400)">Interval</span><span style="font-size:10px;font-weight:700;color:var(--slate-700)">1 frame / 2s</span></div>
+                  <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--slate-100)"><span style="font-size:10px;color:var(--slate-400)">Preview</span><span style="font-size:10px;font-weight:700;color:var(--slate-700)">HLS 25fps</span></div>
+                  <div style="display:flex;justify-content:space-between;padding:6px 0"><span style="font-size:10px;color:var(--slate-400)">Cameras</span><span style="font-size:10px;font-weight:700;color:var(--slate-700)">cam1 + cam3</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slide 5 · FAISS -->
+    <div class="slide" id="slide-4">
+      <div class="slide-inner">
+        <div class="slide-header">
+          <div class="slide-header-rule"><span class="label-tag">05 — FAISS Vector Database</span></div>
+          <div class="h2" style="color:var(--slate-900);margin-bottom:4px">GPU-Accelerated Persistent Vector Index</div>
+          <p style="color:var(--slate-400);font-size:13px">IndexFlatIP · cosine similarity · auto-saved to disk · auto-reindexed on restart</p>
+        </div>
+        <div class="slide-body">
+          <div class="grid-2" style="flex:1">
+            <div style="display:flex;flex-direction:column;gap:14px">
+              <div style="text-align:center;border-radius:18px;padding:22px;background:#F4FBEA;border:1.5px solid rgba(118,185,0,0.35)">
+                <div style="font-size:56px;font-weight:900;color:var(--nv-green);line-height:1" id="faiss-count">81</div>
+                <div style="font-size:11px;color:var(--slate-400);text-transform:uppercase;letter-spacing:0.1em;margin-top:4px">Live Vector Count (growing)</div>
+                <div style="font-size:10px;color:var(--slate-300);margin-top:4px">Sources: uploaded videos + 2 RTSP streams</div>
+              </div>
+              <div style="flex:1;background:var(--slate-50);border:1px solid var(--slate-100);border-radius:16px;padding:16px">
+                <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:var(--slate-400);margin-bottom:14px">Index Architecture</div>
+                <div style="display:flex;flex-direction:column;gap:12px">
+                  <div style="display:flex;align-items:flex-start;gap:10px"><div style="width:28px;height:28px;border-radius:10px;background:rgba(118,185,0,0.12);color:var(--nv-green);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px">⚡</div><div><div style="font-size:12px;font-weight:700;color:var(--slate-800)">FAISS IndexFlatIP</div><div style="font-size:10px;color:var(--slate-400);margin-top:2px">Inner product on L2-normalized = cosine sim. Exact NN, GPU accelerated.</div></div></div>
+                  <div style="display:flex;align-items:flex-start;gap:10px"><div style="width:28px;height:28px;border-radius:10px;background:rgba(59,130,246,0.12);color:var(--blue);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px">💾</div><div><div style="font-size:12px;font-weight:700;color:var(--slate-800)">Disk Persistence</div><div style="font-size:10px;color:var(--slate-400);margin-top:2px">data/faiss/index.faiss + metadata.json. Auto-saved every 50 frames.</div></div></div>
+                  <div style="display:flex;align-items:flex-start;gap:10px"><div style="width:28px;height:28px;border-radius:10px;background:rgba(245,158,11,0.12);color:var(--amber);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px">🔄</div><div><div style="font-size:12px;font-weight:700;color:var(--slate-800)">Auto-Reindex</div><div style="font-size:10px;color:var(--slate-400);margin-top:2px">On startup if index empty → rebuilds from INFINIA manifests automatically.</div></div></div>
+                  <div style="display:flex;align-items:flex-start;gap:10px"><div style="width:28px;height:28px;border-radius:10px;background:rgba(237,39,56,0.12);color:var(--ddn-red);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px">🧬</div><div><div style="font-size:12px;font-weight:700;color:var(--slate-800)">512-dim CLIP Vectors</div><div style="font-size:10px;color:var(--slate-400);margin-top:2px">Each vector: 1 frame from RTSP or uploaded video. Metadata: stream, timestamp, tags.</div></div></div>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:14px">
+              <div style="background:#EFF6FF;border:1.5px solid rgba(59,130,246,0.25);border-radius:16px;padding:16px">
+                <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:var(--blue);margin-bottom:12px">Query Flow</div>
+                <div style="display:flex;flex-direction:column;gap:6px">
+                  <div style="background:white;border:1px solid var(--slate-200);border-radius:10px;padding:8px 12px;font-size:12px;font-weight:700;color:var(--slate-800)">"Car near entrance"</div>
+                  <div style="display:flex;align-items:center;gap:6px"><span style="color:var(--slate-300)">→</span><span style="font-size:11px;color:var(--slate-500)">CLIP text encoder → 512-dim vector</span><span class="pill" style="background:rgba(118,185,0,0.1);color:var(--nv-green);border:none;font-size:9px;padding:2px 6px">GPU</span></div>
+                  <div style="display:flex;align-items:center;gap:6px"><span style="color:var(--slate-300)">→</span><span style="font-size:11px;color:var(--slate-500)">FAISS.search(k=20) cosine similarity</span><span class="pill" style="background:rgba(118,185,0,0.1);color:var(--nv-green);border:none;font-size:9px;padding:2px 6px">GPU</span></div>
+                  <div style="display:flex;align-items:center;gap:6px"><span style="color:var(--slate-300)">→</span><span style="font-size:11px;color:var(--slate-500)">Filter score &gt; 0.25 threshold</span></div>
+                  <div style="display:flex;align-items:center;gap:6px"><span style="color:var(--slate-300)">→</span><span style="font-size:11px;color:var(--slate-500)">Return metadata + S3 frame URLs</span></div>
+                </div>
+              </div>
+              <div style="flex:1;background:var(--slate-50);border:1px solid var(--slate-100);border-radius:16px;padding:16px">
+                <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:var(--slate-400);margin-bottom:12px">DDN VSS vs Alternatives</div>
+                <div style="display:flex;flex-direction:column;gap:0">
+                  <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--slate-100)">
+                    <span style="font-size:12px;color:var(--slate-300)">✗ Pinecone / Weaviate</span>
+                    <span style="font-size:10px;color:var(--slate-300)">$500K–$2M/yr</span>
+                  </div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--slate-100)">
+                    <span style="font-size:12px;color:var(--slate-300)">✗ Separate FAISS server</span>
+                    <span style="font-size:10px;color:var(--slate-300)">Extra infra + latency</span>
+                  </div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0">
+                    <span style="font-size:12px;font-weight:700;color:var(--nv-green)">✓ DDN VSS FAISS GPU</span>
+                    <span style="font-size:10px;font-weight:700;color:var(--nv-green)">$0 · co-located · &lt;1ms</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slide 6 · Semantic Search -->
+    <div class="slide" id="slide-5">
+      <div class="slide-inner">
+        <div class="slide-header">
+          <div class="slide-header-rule"><span class="label-tag">06 — Semantic Search</span></div>
+          <div class="h2" style="color:var(--slate-900);margin-bottom:4px">Natural Language Search — Live Demo</div>
+          <p style="color:var(--slate-400);font-size:13px">Click a query · watch CLIP encode · FAISS return results in &lt;1.2s</p>
+        </div>
+        <div class="slide-body">
+          <div class="flex-row" style="flex:1;min-height:0">
+            <div style="flex:1;background:var(--slate-50);border:1px solid var(--slate-100);border-radius:18px;padding:20px">
+              <div class="search-box">
+                <span class="search-icon">🔍</span>
+                <div class="search-text" id="search-text"></div>
+                <span id="search-speed" style="display:none" class="pill pill-green">&lt;1.2s</span>
+              </div>
+              <div class="query-btns" id="query-btns">
+                <button class="query-btn" onclick="runQuery(this, 'Person near entrance gate')">Person near entrance gate</button>
+                <button class="query-btn" onclick="runQuery(this, 'Vehicle in parking lot')">Vehicle in parking lot</button>
+                <button class="query-btn" onclick="runQuery(this, 'Empty corridor at night')">Empty corridor at night</button>
+                <button class="query-btn" onclick="runQuery(this, 'Crowd near exit')">Crowd near exit</button>
+              </div>
+              <div id="search-results" style="display:none">
+                <div class="results-grid">
+                  <div class="result-card"><div class="result-thumb">📷<span class="result-score">0.94</span></div><div class="result-meta"><p>14:23:07 · cam3</p><p>#entrance</p></div></div>
+                  <div class="result-card"><div class="result-thumb">📷<span class="result-score">0.91</span></div><div class="result-meta"><p>14:19:44 · cam1</p><p>#outdoor</p></div></div>
+                  <div class="result-card"><div class="result-thumb">📷<span class="result-score">0.87</span></div><div class="result-meta"><p>14:21:55 · cam1</p><p>#vehicle</p></div></div>
+                </div>
+                <p class="results-note">FAISS cosine similarity · CLIP ViT-B/32 · GPU accelerated</p>
+              </div>
+            </div>
+            <div style="width:220px;flex-shrink:0;display:flex;flex-direction:column;gap:12px">
+              <div style="background:#F4FBEA;border:1.5px solid rgba(118,185,0,0.3);border-radius:16px;padding:14px">
+                <div class="label-tag" style="margin-bottom:10px">Search Sources</div>
+                <div style="display:flex;flex-direction:column;gap:0">
+                  <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.7)"><span style="font-size:11px;color:var(--slate-500)">Uploaded Videos</span><span style="font-size:14px;font-weight:900;color:var(--blue)">3+</span></div>
+                  <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.7)"><span style="font-size:11px;color:var(--slate-500)">RTSP Live Frames</span><span style="font-size:14px;font-weight:900;color:var(--ddn-red)">∞</span></div>
+                  <div style="display:flex;justify-content:space-between;padding:7px 0"><span style="font-size:11px;color:var(--slate-500)">FAISS Vectors</span><span style="font-size:14px;font-weight:900;color:var(--nv-green)">81+</span></div>
+                </div>
+              </div>
+              <div style="flex:1;background:var(--slate-50);border:1px solid var(--slate-100);border-radius:16px;padding:14px">
+                <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:var(--slate-400);margin-bottom:10px">Why Semantic?</div>
+                <div style="display:flex;flex-direction:column;gap:0">
+                  <div style="font-size:10px;color:var(--slate-500);padding:6px 0;border-bottom:1px solid var(--slate-100);display:flex;gap:6px"><span style="color:var(--nv-green);flex-shrink:0">→</span>"car crash" → "vehicle collision"</div>
+                  <div style="font-size:10px;color:var(--slate-500);padding:6px 0;border-bottom:1px solid var(--slate-100);display:flex;gap:6px"><span style="color:var(--nv-green);flex-shrink:0">→</span>"crowd" → "group of people"</div>
+                  <div style="font-size:10px;color:var(--slate-500);padding:6px 0;border-bottom:1px solid var(--slate-100);display:flex;gap:6px"><span style="color:var(--nv-green);flex-shrink:0">→</span>"night" → low-light frames</div>
+                  <div style="font-size:10px;color:var(--slate-500);padding:6px 0;display:flex;gap:6px"><span style="color:var(--nv-green);flex-shrink:0">→</span>No keywords · No rules</div>
+                </div>
+              </div>
+              <div style="background:#FFF0F1;border:1.5px solid rgba(237,39,56,0.2);border-radius:16px;padding:14px">
+                <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:var(--ddn-red);margin-bottom:8px">Result Includes</div>
+                <div style="display:flex;flex-direction:column;gap:3px">
+                  <div style="font-size:10px;color:var(--slate-500);display:flex;gap:5px"><span style="color:var(--ddn-red)">·</span>Similarity score (0–1)</div>
+                  <div style="font-size:10px;color:var(--slate-500);display:flex;gap:5px"><span style="color:var(--ddn-red)">·</span>Source stream / file</div>
+                  <div style="font-size:10px;color:var(--slate-500);display:flex;gap:5px"><span style="color:var(--ddn-red)">·</span>Timestamp</div>
+                  <div style="font-size:10px;color:var(--slate-500);display:flex;gap:5px"><span style="color:var(--ddn-red)">·</span>AI tags + caption</div>
+                  <div style="font-size:10px;color:var(--slate-500);display:flex;gap:5px"><span style="color:var(--ddn-red)">·</span>S3 frame URL</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slide 7 · Full Pipeline -->
+    <div class="slide" id="slide-6">
+      <div class="slide-inner">
+        <div class="slide-header">
+          <div class="slide-header-rule"><span class="label-tag">07 — End-to-End Pipeline</span></div>
+          <div class="h2" style="color:var(--slate-900);margin-bottom:4px">Complete AI Video Intelligence Pipeline</div>
+          <p style="color:var(--slate-400);font-size:13px">From live camera to searchable intelligence — fully automated</p>
+        </div>
+        <div class="slide-body">
+          <div class="pipeline" style="margin-bottom:18px">
+            <div class="pipe-step" style="background:#FFF0F1;border:1.5px solid rgba(237,39,56,0.25)"><div style="font-size:22px;margin-bottom:6px">📡</div><div style="font-size:9px;font-weight:800;color:var(--ddn-red)">01</div><div style="font-size:11px;font-weight:700;color:var(--slate-800)">RTSP / Upload</div><div style="font-size:9px;color:var(--slate-400)">MediaMTX · MP4</div></div>
+            <div class="pipe-arrow">→</div>
+            <div class="pipe-step" style="background:#FFFBEB;border:1.5px solid rgba(245,158,11,0.25)"><div style="font-size:22px;margin-bottom:6px">📸</div><div style="font-size:9px;font-weight:800;color:var(--amber)">02</div><div style="font-size:11px;font-weight:700;color:var(--slate-800)">Frame Capture</div><div style="font-size:9px;color:var(--slate-400)">OpenCV · 1fr/2s</div></div>
+            <div class="pipe-arrow">→</div>
+            <div class="pipe-step" style="background:#F4FBEA;border:1.5px solid rgba(118,185,0,0.25)"><div style="font-size:22px;margin-bottom:6px">🧠</div><div style="font-size:9px;font-weight:800;color:var(--nv-green)">03</div><div style="font-size:11px;font-weight:700;color:var(--slate-800)">CLIP + BLIP</div><div style="font-size:9px;color:var(--slate-400)">GPU · 512-dim</div></div>
+            <div class="pipe-arrow">→</div>
+            <div class="pipe-step" style="background:#EFF6FF;border:1.5px solid rgba(59,130,246,0.25)"><div style="font-size:22px;margin-bottom:6px">💬</div><div style="font-size:9px;font-weight:800;color:var(--blue)">04</div><div style="font-size:11px;font-weight:700;color:var(--slate-800)">LLM Enrich</div><div style="font-size:9px;color:var(--slate-400)">GPT-4o · Ollama</div></div>
+            <div class="pipe-arrow">→</div>
+            <div class="pipe-step" style="background:#F5F3FF;border:1.5px solid rgba(139,92,246,0.25)"><div style="font-size:22px;margin-bottom:6px">⚡</div><div style="font-size:9px;font-weight:800;color:var(--purple)">05</div><div style="font-size:11px;font-weight:700;color:var(--slate-800)">FAISS Index</div><div style="font-size:9px;color:var(--slate-400)">GPU · IndexFlatIP</div></div>
+            <div class="pipe-arrow">→</div>
+            <div class="pipe-step" style="background:#ECFDF5;border:1.5px solid rgba(16,185,129,0.25)"><div style="font-size:22px;margin-bottom:6px">☁</div><div style="font-size:9px;font-weight:800;color:var(--emerald)">06</div><div style="font-size:11px;font-weight:700;color:var(--slate-800)">DDN INFINIA</div><div style="font-size:9px;color:var(--slate-400)">Keyframes + meta</div></div>
+            <div class="pipe-arrow">→</div>
+            <div class="pipe-step" style="background:#FFFBEB;border:1.5px solid rgba(245,158,11,0.25)"><div style="font-size:22px;margin-bottom:6px">🔍</div><div style="font-size:9px;font-weight:800;color:var(--amber)">07</div><div style="font-size:11px;font-weight:700;color:var(--slate-800)">NL Search</div><div style="font-size:9px;color:var(--slate-400)">CLIP → FAISS</div></div>
+          </div>
+          <div style="background:#ECFDF5;border:1.5px solid rgba(16,185,129,0.3);border-radius:16px;padding:18px;margin-bottom:14px">
+            <div style="font-size:14px;font-weight:700;color:var(--emerald);margin-bottom:10px">★ DDN INFINIA — The Unified Intelligence Layer</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 32px">
+              <div style="display:flex;gap:8px;font-size:12px;color:var(--slate-600)"><span style="color:var(--emerald);flex-shrink:0">●</span>S3-compatible — keyframes + manifest + embeddings in one place</div>
+              <div style="display:flex;gap:8px;font-size:12px;color:var(--slate-600)"><span style="color:var(--emerald);flex-shrink:0">●</span>GPU-Direct NVMe: disk → GPU with zero CPU bottleneck</div>
+              <div style="display:flex;gap:8px;font-size:12px;color:var(--slate-600)"><span style="color:var(--emerald);flex-shrink:0">●</span>No separate vector DB — FAISS lives alongside raw video</div>
+              <div style="display:flex;gap:8px;font-size:12px;color:var(--slate-600)"><span style="color:var(--emerald);flex-shrink:0">●</span>Linear scale: 1PB and 100PB respond identically</div>
+            </div>
+          </div>
+          <div class="grid-5">
+            <div class="kpi" style="background:#F4FBEA;border:1.5px solid rgba(118,185,0,0.25)"><div class="kpi-val" style="color:var(--nv-green)">&lt;1ms</div><div class="kpi-lbl">FAISS Search</div></div>
+            <div class="kpi" style="background:#EFF6FF;border:1.5px solid rgba(59,130,246,0.25)"><div class="kpi-val" style="color:var(--blue)">$0</div><div class="kpi-lbl">Vector DB Cost</div></div>
+            <div class="kpi" style="background:#FFF0F1;border:1.5px solid rgba(237,39,56,0.25)"><div class="kpi-val" style="color:var(--ddn-red)">&gt;85%</div><div class="kpi-lbl">GPU Utilization</div></div>
+            <div class="kpi" style="background:#FFFBEB;border:1.5px solid rgba(245,158,11,0.25)"><div class="kpi-val" style="color:var(--amber)">512d</div><div class="kpi-lbl">CLIP Dimensions</div></div>
+            <div class="kpi" style="background:#ECFDF5;border:1.5px solid rgba(16,185,129,0.25)"><div class="kpi-val" style="color:var(--emerald)">∞</div><div class="kpi-lbl">Scale Ceiling</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slide 8 · Business Case -->
+    <div class="slide" id="slide-7">
+      <div class="slide-inner">
+        <div class="slide-header">
+          <div class="slide-header-rule"><span class="label-tag">08 — Business Case</span></div>
+          <div class="h2" style="color:var(--slate-900);margin-bottom:4px">Strategic Value Framework</div>
+          <p style="color:var(--slate-400);font-size:13px">GTC 2026 · NVIDIA VSS × DDN INFINIA</p>
+        </div>
+        <div class="slide-body">
+          <div class="grid-3" style="flex:1">
+            <div class="card" style="background:#ECFDF5;border:1.5px solid rgba(16,185,129,0.25)">
+              <div style="font-size:14px;font-weight:700;color:var(--emerald);margin-bottom:6px">Business Outcome</div>
+              <span style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:999px;background:white;color:var(--emerald);border:1px solid rgba(16,185,129,0.3);display:inline-block;margin-bottom:16px">Dark Data → Intelligence</span>
+              <ul style="display:flex;flex-direction:column;gap:8px;flex:1">
+                <li style="font-size:12px;color:var(--slate-600);display:flex;gap:6px"><span style="color:var(--emerald);flex-shrink:0">→</span>1 analyst replaces 3-person tagging team</li>
+                <li style="font-size:12px;color:var(--slate-600);display:flex;gap:6px"><span style="color:var(--emerald);flex-shrink:0">→</span>PB-scale NLP search in &lt;2 seconds</li>
+                <li style="font-size:12px;color:var(--slate-600);display:flex;gap:6px"><span style="color:var(--emerald);flex-shrink:0">→</span>RTSP cameras searchable in real-time</li>
+                <li style="font-size:12px;color:var(--slate-600);display:flex;gap:6px"><span style="color:var(--emerald);flex-shrink:0">→</span>Edge-case curation: weeks → minutes</li>
+              </ul>
+              <div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(16,185,129,0.2)"><p style="font-size:12px;font-style:italic;color:var(--emerald)">"Our video estate became a live intelligence asset."</p></div>
+            </div>
+            <div class="card" style="background:#FFFBEB;border:1.5px solid rgba(245,158,11,0.25)">
+              <div style="font-size:14px;font-weight:700;color:var(--amber);margin-bottom:6px">Financial Outcome</div>
+              <span style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:999px;background:white;color:var(--amber);border:1px solid rgba(245,158,11,0.3);display:inline-block;margin-bottom:16px">$2M–$5M Eliminated</span>
+              <ul style="display:flex;flex-direction:column;gap:8px;flex:1">
+                <li style="font-size:12px;color:var(--slate-600);display:flex;gap:6px"><span style="color:var(--amber);flex-shrink:0">→</span>$500K–$2M vector DB cost → $0 (FAISS GPU)</li>
+                <li style="font-size:12px;color:var(--slate-600);display:flex;gap:6px"><span style="color:var(--amber);flex-shrink:0">→</span>$800K–$3M/yr cloud egress removed</li>
+                <li style="font-size:12px;color:var(--slate-600);display:flex;gap:6px"><span style="color:var(--amber);flex-shrink:0">→</span>Annotation budget eliminated</li>
+                <li style="font-size:12px;color:var(--slate-600);display:flex;gap:6px"><span style="color:var(--amber);flex-shrink:0">→</span>Zero marginal cost per FAISS query</li>
+              </ul>
+              <div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(245,158,11,0.2)"><p style="font-size:12px;font-style:italic;color:var(--amber)">"One infra decision eliminated three budget lines."</p></div>
+            </div>
+            <div class="card" style="background:#FFF0F1;border:1.5px solid rgba(237,39,56,0.25)">
+              <div style="font-size:14px;font-weight:700;color:var(--ddn-red);margin-bottom:6px">AI Infrastructure</div>
+              <span style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:999px;background:white;color:var(--ddn-red);border:1px solid rgba(237,39,56,0.3);display:inline-block;margin-bottom:16px">GPU: 40% → &gt;85%</span>
+              <ul style="display:flex;flex-direction:column;gap:8px;flex:1">
+                <li style="font-size:12px;color:var(--slate-600);display:flex;gap:6px"><span style="color:var(--ddn-red);flex-shrink:0">→</span>CLIP + FAISS co-located on GPU — zero I/O starvation</li>
+                <li style="font-size:12px;color:var(--slate-600);display:flex;gap:6px"><span style="color:var(--ddn-red);flex-shrink:0">→</span>RTSP → CLIP → FAISS in one GPU pass (&lt;50ms)</li>
+                <li style="font-size:12px;color:var(--slate-600);display:flex;gap:6px"><span style="color:var(--ddn-red);flex-shrink:0">→</span>NVIDIA VSS blueprint — zero integration debt</li>
+                <li style="font-size:12px;color:var(--slate-600);display:flex;gap:6px"><span style="color:var(--ddn-red);flex-shrink:0">→</span>Auto-reindex on restart — zero manual ops</li>
+              </ul>
+              <div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(237,39,56,0.2)"><p style="font-size:12px;font-style:italic;color:var(--ddn-red)">"GPUs now run at the speed we paid for."</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slide 9 · Closing -->
+    <div class="slide" id="slide-8">
+      <div class="accent-bar" style="background:linear-gradient(to bottom, var(--nv-green), var(--ddn-red))"></div>
+      <div class="dark-panel">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:32px">
+            <div style="width:8px;height:8px;border-radius:50%;background:var(--ddn-red)"></div>
+            <div style="width:8px;height:8px;border-radius:50%;background:var(--nv-green)"></div>
+            <span style="color:rgba(255,255,255,0.25);font-size:10px;font-family:'JetBrains Mono',monospace;margin-left:8px">GTC 2026</span>
+          </div>
+          <p style="color:rgba(255,255,255,0.6);font-size:20px;font-weight:300;line-height:1.6;margin-bottom:14px">Your cameras are generating intelligence right now.</p>
+          <p style="font-size:24px;font-weight:700;color:var(--nv-green);line-height:1.3">Are you capturing it?</p>
+        </div>
+        <div>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px">
+            <div style="font-size:11px;color:rgba(255,255,255,0.28)">● Scan QR for live demo access</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.28)">● PoC: 2-week setup</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.28)">● Build.DDN.com/vss docs</div>
+          </div>
+          <p style="font-size:13px;font-style:italic;color:var(--nv-green)">"Let me show you how."</p>
+        </div>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:40px 56px;background:white">
+        <div style="margin-bottom:28px">
+          <div style="font-size:42px;font-weight:900;color:var(--slate-900);line-height:1;margin-bottom:6px">Build.DDN:VSS</div>
+          <div style="font-size:15px;color:var(--slate-400)">Multimodal Semantic Video Search</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:28px">
+          <span style="font-size:32px;font-weight:900;color:var(--ddn-red)">DDN</span>
+          <span style="font-size:26px;color:var(--slate-300)">×</span>
+          <span style="font-size:32px;font-weight:900;color:var(--nv-green)">NVIDIA</span>
+        </div>
+        <div style="height:1px;background:var(--slate-100);margin-bottom:24px"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:28px">
+          <div class="kpi" style="background:#FFF0F1;border:1.5px solid rgba(237,39,56,0.25)"><div class="kpi-val" style="color:var(--ddn-red)">RTSP+VOD</div><div class="kpi-lbl">Ingestion Sources</div></div>
+          <div class="kpi" style="background:#F4FBEA;border:1.5px solid rgba(118,185,0,0.25)"><div class="kpi-val" style="color:var(--nv-green)">FAISS GPU</div><div class="kpi-lbl">Vector Database</div></div>
+          <div class="kpi" style="background:#EFF6FF;border:1.5px solid rgba(59,130,246,0.25)"><div class="kpi-val" style="color:var(--blue)">&lt;1ms</div><div class="kpi-lbl">Search Latency</div></div>
+          <div class="kpi" style="background:#FFFBEB;border:1.5px solid rgba(245,158,11,0.25)"><div class="kpi-val" style="color:var(--amber)">$0</div><div class="kpi-lbl">Vector DB License</div></div>
+        </div>
+        <p style="font-size:11px;color:var(--slate-300)">NVIDIA GPU · DDN INFINIA · CLIP · BLIP · FAISS · MediaMTX · GTC 2026</p>
+      </div>
+    </div>
+
+  </div><!-- /slides-wrapper -->
+
+  <!-- ── Bottom bar ────────────────────────────────────────────────── -->
+  <div id="bottombar">
+    <button class="nav-btn" id="btn-prev" onclick="navigate(-1)">← Prev</button>
+    <span style="font-size:11px;color:var(--slate-300);font-family:'JetBrains Mono',monospace">
+      <span id="slide-num">1</span> / 9 &nbsp;·&nbsp; <span style="color:var(--nv-green)">F</span> fullscreen &nbsp;·&nbsp; <span style="color:var(--nv-green)">→</span> next
+    </span>
+    <button class="nav-btn next" id="btn-next" onclick="navigate(1)">Next →</button>
+  </div>
+
+</div><!-- /app -->
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+const TOTAL = 9
+let current = 0
+let direction = 1
+
+const SLIDE_TITLES = [
+  'Cover', 'The Challenge', 'Architecture',
+  'Live RTSP Streams', 'FAISS Vector DB', 'Semantic Search',
+  'Full Pipeline', 'Business Case', 'Closing'
+]
+
+// ── Build dot nav ──────────────────────────────────────────────────────────
+const dotsEl = document.getElementById('dots')
+for (let i = 0; i < TOTAL; i++) {
+  const b = document.createElement('button')
+  b.className = 'dot-btn' + (i === 0 ? ' active' : '')
+  b.style.width = i === 0 ? '24px' : '6px'
+  b.title = SLIDE_TITLES[i]
+  b.onclick = () => goTo(i)
+  dotsEl.appendChild(b)
+}
+
+function updateDots() {
+  const btns = dotsEl.querySelectorAll('.dot-btn')
+  btns.forEach((b, i) => {
+    b.classList.toggle('active', i === current)
+    b.style.width = i === current ? '24px' : '6px'
+  })
+}
+
+// ── Navigation ─────────────────────────────────────────────────────────────
+function goTo(idx) {
+  if (idx < 0 || idx >= TOTAL || idx === current) return
+  direction = idx > current ? 1 : -1
+  const prevSlide = document.getElementById('slide-' + current)
+  current = idx
+  const nextSlide = document.getElementById('slide-' + current)
+
+  // Exit animation
+  prevSlide.style.opacity = '0'
+  prevSlide.style.transform = `translateX(${direction > 0 ? '-60px' : '60px'})`
+  prevSlide.style.transition = 'opacity 0.28s ease, transform 0.28s cubic-bezier(0.25,0.46,0.45,0.94)'
+
+  // Enter animation
+  nextSlide.style.opacity = '0'
+  nextSlide.style.transform = `translateX(${direction > 0 ? '60px' : '-60px'})`
+  nextSlide.style.transition = 'none'
+  nextSlide.style.display = 'flex'
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      nextSlide.style.transition = 'opacity 0.28s ease, transform 0.28s cubic-bezier(0.25,0.46,0.45,0.94)'
+      nextSlide.style.opacity = '1'
+      nextSlide.style.transform = 'translateX(0)'
+    })
+  })
+
+  setTimeout(() => {
+    prevSlide.style.display = 'none'
+    prevSlide.classList.remove('active')
+    nextSlide.classList.add('active')
+    prevSlide.style.opacity = ''
+    prevSlide.style.transform = ''
+    prevSlide.style.transition = ''
+  }, 290)
+
+  // Update UI
+  document.getElementById('slide-title').textContent = SLIDE_TITLES[current]
+  document.getElementById('slide-num').textContent = current + 1
+  document.getElementById('btn-prev').disabled = current === 0
+  document.getElementById('btn-next').disabled = current === TOTAL - 1
+  document.getElementById('btn-next').className = 'nav-btn' + (current < TOTAL - 1 ? ' next' : '')
+  updateDots()
+}
+
+function navigate(dir) { goTo(current + dir) }
+
+// ── Keyboard ───────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') { e.preventDefault(); navigate(1) }
+  if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')  { e.preventDefault(); navigate(-1) }
+  if (e.key === 'f' || e.key === 'F') toggleFS()
+  if (e.key === 'Escape') { if (document.fullscreenElement) document.exitFullscreen() }
+})
+
+// ── Fullscreen ─────────────────────────────────────────────────────────────
+function toggleFS() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {})
+    document.getElementById('fs-btn').textContent = '⛶'
+  } else {
+    document.exitFullscreen()
+    document.getElementById('fs-btn').textContent = '⛶'
+  }
+}
+
+// ── HLS Camera Streams ─────────────────────────────────────────────────────
+// Connects to MediaMTX HLS at http://172.20.146.6:8888
+// CORS is enabled on MediaMTX so this works from any file://
+
+function initHLS(videoId, placeholderId, hlsUrl) {
+  const video = document.getElementById(videoId)
+  const placeholder = document.getElementById(placeholderId)
+
+  if (typeof Hls === 'undefined') {
+    // hls.js CDN failed to load — show error
+    if (placeholder) placeholder.innerHTML = '<p style="color:#94A3B8;font-size:11px">HLS library unavailable</p>'
+    return
+  }
+
+  if (Hls.isSupported()) {
+    const hls = new Hls({ lowLatencyMode: true, maxBufferLength: 4, backBufferLength: 0 })
+    hls.loadSource(hlsUrl)
+    hls.attachMedia(video)
+    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      video.play().catch(() => {})
+      if (placeholder) placeholder.style.display = 'none'
+      video.style.display = 'block'
+    })
+    hls.on(Hls.Events.ERROR, (e, data) => {
+      if (data.fatal && placeholder) {
+        placeholder.innerHTML = '<p style="color:#94A3B8;font-size:11px;text-align:center;padding:20px">Stream offline<br><small>Start ingestion in the app</small></p>'
+      }
+    })
+  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = hlsUrl
+    video.play().catch(() => {})
+    if (placeholder) placeholder.style.display = 'none'
+    video.style.display = 'block'
+  }
+}
+
+// Init cameras pointing directly at MediaMTX HLS port
+// (works because MediaMTX has Access-Control-Allow-Origin: *)
+const SERVER = 'http://172.20.146.6:8888'
+initHLS('cam1-video', 'cam1-placeholder', `${SERVER}/cam1/index.m3u8`)
+initHLS('cam3-video', 'cam3-placeholder', `${SERVER}/cam3/index.m3u8`)
+
+// ── Live counters (simulated — mirrors real backend rate) ──────────────────
+let captured = 0, indexed = 0, stored = 0
+setInterval(() => {
+  captured++; indexed++
+  if (captured % 5 === 0) stored++
+  document.getElementById('cnt-captured').textContent = captured
+  document.getElementById('cnt-indexed').textContent  = indexed
+  document.getElementById('cnt-stored').textContent   = stored
+}, 2000)
+
+// ── FAISS vector counter ───────────────────────────────────────────────────
+let faissCount = 81
+setInterval(() => {
+  faissCount++
+  const el = document.getElementById('faiss-count')
+  if (el) el.textContent = faissCount
+}, 2000)
+
+// ── Semantic search simulator ──────────────────────────────────────────────
+let searchTimer = null
+function runQuery(btn, query) {
+  // Clear previous
+  if (searchTimer) clearInterval(searchTimer)
+  document.querySelectorAll('.query-btn').forEach(b => b.classList.remove('active'))
+  btn.classList.add('active')
+  document.getElementById('search-results').style.display = 'none'
+  document.getElementById('search-speed').style.display = 'none'
+  const textEl = document.getElementById('search-text')
+  textEl.innerHTML = ''
+  const cursor = document.createElement('span')
+  cursor.className = 'cursor'
+
+  let i = 0
+  searchTimer = setInterval(() => {
+    textEl.textContent = query.slice(0, ++i)
+    textEl.appendChild(cursor)
+    if (i >= query.length) {
+      clearInterval(searchTimer)
+      searchTimer = null
+      setTimeout(() => {
+        document.getElementById('search-speed').style.display = 'inline-flex'
+        document.getElementById('search-results').style.display = 'block'
+        document.getElementById('search-results').style.animation = 'fadeIn 0.3s ease'
+      }, 500)
+    }
+  }, 38)
+}
+
+// Add fadeIn keyframe
+const style = document.createElement('style')
+style.textContent = '@keyframes fadeIn { from { opacity:0; transform:translateY(8px) } to { opacity:1; transform:none } }'
+document.head.appendChild(style)
+
+// ── Init state ─────────────────────────────────────────────────────────────
+document.getElementById('btn-prev').disabled = true
+document.getElementById('slide-num').textContent = '1'
+// Hide all non-active slides
+for (let i = 1; i < TOTAL; i++) {
+  const s = document.getElementById('slide-' + i)
+  if (s) { s.style.display = 'none'; }
+}
+</script>
+</body>
+</html>
