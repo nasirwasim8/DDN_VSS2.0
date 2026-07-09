@@ -35,13 +35,7 @@ function Kpi({ value, label, color, bg }: { value: string; label: string; color:
   )
 }
 
-function FlowArrow() {
-  return (
-    <div className="flex items-center justify-center flex-shrink-0 w-8">
-      <ArrowRight className="w-4 h-4 text-slate-500" />
-    </div>
-  )
-}
+
 
 function LiveDot({ color = '#76B900' }: { color?: string }) {
   return (
@@ -511,7 +505,6 @@ function Slide04RTSP() {
 
 // Slide 5 — FAISS Vector DB
 function Slide05FAISS() {
-  const [animating, setAnimating] = useState(false)
   const [vectors, setVectors] = useState(81)
 
   useEffect(() => {
