@@ -1,0 +1,14 @@
+{
+  "projects": {
+    "default": "ddnvss"
+  },
+  "targets": {
+    "ddnvss": {
+      "hosting": {
+        "ddnvss": [
+          "ddnvss"
+        ]
+      }
+    }
+  }
+}
